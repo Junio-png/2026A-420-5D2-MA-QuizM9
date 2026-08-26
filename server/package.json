@@ -1,0 +1,11 @@
+{
+  "name": "quiz-m9-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
