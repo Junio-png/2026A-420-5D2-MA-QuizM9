@@ -15,29 +15,28 @@ import { DatabaseSync } from 'node:sqlite';
 export function loadQuiz(path) {
   const db = new DatabaseSync(path, { readOnly: true });
 
-  // TODO : lire le questionnaire, ses questions et leurs choix, puis
-  // construire l'objet documenté ci-dessus.
-  //
-  // Les requêtes SQL dont vous avez besoin :
-  //
-  //   SELECT id, title FROM quiz LIMIT 1
-  //
-  //   SELECT id, text, duration_seconds
-  //     FROM question
-  //    WHERE quiz_id = ?
-  //    ORDER BY position
-  //
-  //   SELECT id, text, is_correct FROM choice WHERE question_id = ? ORDER BY id
-  //
-  // Le mode d'emploi de node:sqlite :
-  //
-  //   db.prepare(sql).get(...params)   → la première ligne (un objet)
-  //   db.prepare(sql).all(...params)   → toutes les lignes (un tableau)
-  //
-  // Attention aux conversions : la base dit « duration_seconds » et
-  // « is_correct » (0 ou 1) ; l'objet attendu dit « durationSeconds » et
-  // « isCorrect » (booléen). Fermez la base avec db.close() avant de renvoyer.
+  const quiz = db
+    .prepare('SELECT id, title FROM quiz LIMIT 1')
+    .get();
+
+  const questions = db
+    .prepare(
+      `SELECT id, text, duration_seconds
+         FROM question
+        WHERE quiz_id = ?
+        ORDER BY position`,
+    )
+    .all(quiz.id)
+    .map((q) => ({
+      id: q.id,
+      text: q.text,
+      durationSeconds: q.duration_seconds,
+      choices: db
+        .prepare('SELECT id, text, is_correct FROM choice WHERE question_id = ? ORDER BY id')
+        .all(q.id)
+        .map((c) => ({ id: c.id, text: c.text, isCorrect: c.is_correct === 1 })),
+    }));
 
   db.close();
-  return { id: 0, title: 'À FAIRE', questions: [] };
+  return { id: quiz.id, title: quiz.title, questions };
 }

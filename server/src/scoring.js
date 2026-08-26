@@ -24,17 +24,9 @@
  * @returns {number} points obtenus, entier entre 0 et 10
  */
 export function calculateScore({ isCorrect, responseTimeMs, questionDurationMs, isFirstCorrectAnswer }) {
-  // TODO : appliquer les règles ci-dessus, dans l'ordre.
-  //
-  // 1. Une mauvaise réponse vaut 0.
-  // 2. Une réponse après l'échéance (temps > durée) vaut 0.
-  // 3. Sinon : 5 points, plus le bonus de rapidité, plus 2 si c'est la
-  //    première bonne réponse.
-  //
-  // Bonus de rapidité : Math.floor(3 * (1 - responseTimeMs / questionDurationMs)),
-  // jamais négatif.
-  //
-  // Les cinq premières vérifications de « npm run verifier » testent cette
-  // fonction directement, sans serveur : commencez ici.
-  return 0;
+  if (!isCorrect) return 0;
+  if (responseTimeMs > questionDurationMs) return 0;
+  const speedBonus = Math.max(0, Math.floor(3 * (1 - responseTimeMs / questionDurationMs)));
+  const firstBonus = isFirstCorrectAnswer ? 2 : 0;
+  return 5 + speedBonus + firstBonus;
 }

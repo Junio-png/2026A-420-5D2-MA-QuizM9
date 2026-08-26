@@ -49,9 +49,8 @@ function requestedGame(req, res) {
 
 // Créer une partie (animateur).
 app.post('/api/games', (req, res) => {
-  // TODO : créer la partie avec createGame(quiz) et répondre
-  // 201 { code }.
-  res.status(500).json({ error: 'À faire.' });
+  const game = createGame(quiz);
+  res.status(201).json({ code: game.code });
 });
 
 // Rejoindre une partie avec un pseudonyme (joueur).
@@ -59,15 +58,19 @@ app.post('/api/games/:code/players', (req, res) => {
   const game = requestedGame(req, res);
   if (!game) return;
 
-  // TODO : valider puis inscrire le joueur.
-  //
-  // - le pseudonyme vient de req.body.nickname : refuser (400) s'il est
-  //   absent, n'est pas une chaîne, ou est vide une fois coupé avec trim() ;
-  // - refuser (400) si la partie n'est plus dans l'état 'lobby' ;
-  // - refuser (400) si le pseudonyme est déjà dans game.players ;
-  // - sinon : game.players.set(nickname, { nickname, score: 0 }) et
-  //   répondre 201 { nickname }.
-  res.status(500).json({ error: 'À faire.' });
+  const nickname = typeof req.body?.nickname === 'string' ? req.body.nickname.trim() : '';
+  if (nickname === '') {
+    return res.status(400).json({ error: 'Le pseudonyme est obligatoire.' });
+  }
+  if (game.state !== 'lobby') {
+    return res.status(400).json({ error: 'La partie est déjà commencée.' });
+  }
+  if (game.players.has(nickname)) {
+    return res.status(400).json({ error: 'Ce pseudonyme est déjà pris.' });
+  }
+
+  game.players.set(nickname, { nickname, score: 0 });
+  res.status(201).json({ nickname });
 });
 
 // L'état de la partie — la route que le client sonde toutes les secondes.
@@ -75,9 +78,8 @@ app.get('/api/games/:code', (req, res) => {
   const game = requestedGame(req, res);
   if (!game) return;
 
-  // TODO : clore la question si son échéance est passée
-  // (closeQuestionIfExpired), puis répondre 200 avec publicState(game).
-  res.status(500).json({ error: 'À faire.' });
+  closeQuestionIfExpired(game);
+  res.status(200).json(publicState(game));
 });
 
 // L'animateur avance : clôt la question en cours, ou passe à la suivante.
@@ -85,14 +87,13 @@ app.post('/api/games/:code/next', (req, res) => {
   const game = requestedGame(req, res);
   if (!game) return;
 
-  // TODO : d'abord closeQuestionIfExpired(game). Ensuite :
-  //
-  // - si une question est encore en cours (state 'question'), la clore avec
-  //   closeQuestion(game) — l'animateur passe au classement ;
-  // - sinon, advance(game) — question suivante, ou fin de partie.
-  //
-  // Dans les deux cas, répondre 200 avec publicState(game).
-  res.status(500).json({ error: 'À faire.' });
+  closeQuestionIfExpired(game);
+  if (game.state === 'question') {
+    closeQuestion(game);
+  } else {
+    advance(game);
+  }
+  res.status(200).json(publicState(game));
 });
 
 // Un joueur répond à la question en cours.
@@ -100,22 +101,27 @@ app.post('/api/games/:code/answers', (req, res) => {
   const game = requestedGame(req, res);
   if (!game) return;
 
-  // TODO : enregistrer la réponse { nickname, choiceId } de req.body.
-  //
-  // Dans l'ordre :
-  // - closeQuestionIfExpired(game) : une réponse qui arrive après
-  //   l'échéance trouve la question close ;
-  // - refuser (400) si game.state n'est pas 'question' ;
-  // - refuser (400) si le pseudonyme n'est pas dans game.players ;
-  // - refuser (400) si le joueur a déjà répondu (game.answers) ;
-  // - refuser (400) si le choiceId n'appartient pas à la question courante
-  //   (currentQuestion(game)) ;
-  // - sinon : game.answers.set(nickname, { choiceId, receivedAt: Date.now() })
-  //   et répondre 201 {}.
-  //
+  closeQuestionIfExpired(game);
+  if (game.state !== 'question') {
+    return res.status(400).json({ error: 'Aucune question en cours.' });
+  }
+
+  const { nickname, choiceId } = req.body ?? {};
+  if (!game.players.has(nickname)) {
+    return res.status(400).json({ error: 'Joueur inconnu dans cette partie.' });
+  }
+  if (game.answers.has(nickname)) {
+    return res.status(400).json({ error: 'Ce joueur a déjà répondu.' });
+  }
+  const question = currentQuestion(game);
+  if (!question.choices.some((c) => c.id === choiceId)) {
+    return res.status(400).json({ error: 'Choix inconnu pour cette question.' });
+  }
+
   // Le moment de la réponse est celui du SERVEUR : le bonus de rapidité ne
   // se négocie pas avec l'horloge du client (on y reviendra, semaine 11).
-  res.status(500).json({ error: 'À faire.' });
+  game.answers.set(nickname, { choiceId, receivedAt: Date.now() });
+  res.status(201).json({});
 });
 
 const port = process.env.PORT ?? 3000;

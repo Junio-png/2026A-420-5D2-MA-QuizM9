@@ -13,16 +13,25 @@ export function useGame(code) {
   useEffect(() => {
     if (!code) return;
 
-    // TODO : interroger le serveur toutes les secondes.
-    //
-    // - écrire une fonction async interne qui appelle fetchGame(code)
-    //   puis setGame(...) avec le résultat (dans un try/catch : si le
-    //   serveur ne répond pas, on réessaiera à la prochaine seconde) ;
-    // - l'appeler une première fois tout de suite ;
-    // - puis la répéter avec setInterval(..., 1000) ;
-    // - IMPORTANT : renvoyer une fonction de nettoyage qui fait
-    //   clearInterval, sinon les minuteries s'empilent à chaque
-    //   changement d'écran.
+    let unmounted = false;
+
+    async function poll() {
+      try {
+        const nextGame = await fetchGame(code);
+        if (!unmounted) setGame(nextGame);
+      } catch {
+        // Le serveur redémarre ou la partie a disparu : on réessaiera
+        // à la prochaine seconde.
+      }
+    }
+
+    poll();
+    const timer = setInterval(poll, 1000);
+
+    return () => {
+      unmounted = true;
+      clearInterval(timer);
+    };
   }, [code]);
 
   return game;
