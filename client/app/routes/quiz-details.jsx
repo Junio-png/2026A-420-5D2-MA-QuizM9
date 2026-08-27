@@ -1,29 +1,22 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { fetchQuiz } from '../api.js';
+import { Link, useLoaderData } from 'react-router';
 
 /**
  * Un questionnaire et ses questions — ce que l'animateur vérifie avant de
  * jouer. La bonne réponse est cochée : c'est la vue de l'AUTEUR.
  *
- * TODO (partie 2, jalon ②) : passer au rendu côté serveur, en vous calquant
- * sur le loader de la liste (/quizzes).
- *
- * 1. Exportez `loader` — elle reçoit { params }, et params.id est l'id de
- *    l'URL : fetch(`http://localhost:3000/api/quizzes/${params.id}`).
- * 2. Si l'API répond 404, levez une erreur ; sinon retournez le JSON.
- * 3. Dans le composant, remplacez useParams + useState + useEffect par
- *    const quiz = useLoaderData();
+ * Rendu CÔTÉ SERVEUR, calqué sur le loader de la liste ; params.id vient
+ * de l'URL (/quizzes/:id).
  */
+export async function loader({ params }) {
+  const response = await fetch(`http://localhost:3000/api/quizzes/${params.id}`);
+  if (!response.ok) {
+    throw new Response('Questionnaire introuvable.', { status: 404 });
+  }
+  return response.json();
+}
+
 export default function QuizDetails() {
-  const { id } = useParams();
-  const [quiz, setQuiz] = useState(null);
-
-  useEffect(() => {
-    fetchQuiz(id).then(setQuiz).catch(() => {});
-  }, [id]);
-
-  if (!quiz) return <main className="screen">Chargement…</main>;
+  const quiz = useLoaderData();
 
   return (
     <main className="screen">

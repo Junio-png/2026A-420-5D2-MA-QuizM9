@@ -1,30 +1,23 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { fetchQuizzes } from '../api.js';
+import { Link, useLoaderData } from 'react-router';
 
 /**
  * La liste de l'animateur : ses questionnaires. (Tous, en fait — les
  * comptes arrivent à la semaine 5.)
  *
- * TODO (partie 2, jalon ①) : passer du rendu côté client au rendu côté
- * serveur. Pour l'instant, la page part vide et va chercher ses données
- * dans le navigateur, après le rendu — affichez la source de la page : les
- * questionnaires n'y sont pas. Reprenez le loader écrit ensemble au
- * tableau :
- *
- * 1. Exportez une fonction `loader` : elle s'exécute sur le serveur, AVANT
- *    le rendu. Elle appelle l'API par son adresse complète —
- *    fetch('http://localhost:3000/api/quizzes') — et retourne le JSON.
- * 2. Dans le composant, remplacez useState + useEffect par
- *    const quizzes = useLoaderData();
- * 3. Réaffichez la source de la page : les titres y sont, déjà en HTML.
+ * Rendu CÔTÉ SERVEUR : le loader s'exécute sur le serveur, AVANT le rendu.
+ * Affichez la source de la page — les titres y sont, déjà en HTML.
  */
-export default function Quizzes() {
-  const [quizzes, setQuizzes] = useState([]);
+export async function loader() {
+  // Ici, pas de relais Vite : on appelle l'API par son adresse complète.
+  const response = await fetch('http://localhost:3000/api/quizzes');
+  if (!response.ok) {
+    throw new Error(`L'API répond ${response.status}.`);
+  }
+  return response.json();
+}
 
-  useEffect(() => {
-    fetchQuizzes().then(setQuizzes).catch(() => {});
-  }, []);
+export default function Quizzes() {
+  const quizzes = useLoaderData();
 
   return (
     <main className="screen">
