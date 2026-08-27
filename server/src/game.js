@@ -1,95 +1,92 @@
 /**
- * L'état des parties, EN MÉMOIRE. Tout est perdu au redémarrage du serveur —
- * c'est le problème que la semaine 2 règle.
+ * Le moteur de jeu, version semaine 2 : l'état des parties vit DANS LA BASE.
  *
- * Une partie (game) :
- *   {
- *     code,            // six chiffres, affiché par l'animateur
- *     quiz,            // chargé de quiz.db au démarrage
- *     state,           // 'lobby' | 'question' | 'results' | 'finished'
- *     questionIndex,   // -1 dans le salon
- *     players,         // Map nickname -> { nickname, score }
- *     answers,         // Map nickname -> { choiceId, receivedAt } (question courante)
- *     openedAt,        // horodatage serveur d'ouverture de la question
- *     deadline,        // openedAt + durée de la question
- *   }
+ * Plus aucune Map en mémoire. Une partie est une ligne de la table game,
+ * relue à chaque requête ; ses joueurs et leurs réponses sont des lignes de
+ * player et answer. On peut redémarrer le serveur en pleine partie : rien
+ * n'est perdu.
+ *
+ * Le moteur ne fait aucun SQL lui-même : il passe par repository/. C'est la
+ * règle de la semaine, et elle paiera à la semaine 4 (PostgreSQL).
+ *
+ * Machine à états d'une partie (colonne game.state) :
+ *   'lobby' → 'question' ⇄ 'results' → 'finished'
  */
 import { calculateScore } from './scoring.js';
+import * as repository from './repository/index.js';
 
-const games = new Map();
-
-/** Un code de partie à six chiffres, unique parmi les parties en cours. */
+/** Un code de partie à six chiffres, unique parmi les parties existantes. */
 function generateCode() {
   let code;
   do {
     code = String(Math.floor(100000 + Math.random() * 900000));
-  } while (games.has(code));
+  } while (repository.findGameByCode(code));
   return code;
 }
 
-export function createGame(quiz) {
-  const game = {
-    code: generateCode(),
-    quiz,
-    state: 'lobby',
-    questionIndex: -1,
-    players: new Map(),
-    answers: new Map(),
-    openedAt: null,
-    deadline: null,
-  };
-  games.set(game.code, game);
-  return game;
+/** Crée une partie sur ce questionnaire et retourne sa ligne game. */
+export function createGame(quizId) {
+  const code = generateCode();
+  repository.createGame(quizId, code, Date.now());
+  return repository.findGameByCode(code);
 }
 
-export function findGame(code) {
-  return games.get(code) ?? null;
-}
-
+/** La question courante d'une partie, ou null hors d'une question. */
 export function currentQuestion(game) {
-  return game.quiz.questions[game.questionIndex] ?? null;
+  const quiz = repository.getQuizWithQuestions(game.quiz_id);
+  return quiz.questions[game.question_index] ?? null;
+}
+
+/** L'échéance de la question courante (horodatage serveur, en ms). */
+function deadlineOf(game, question) {
+  return game.question_started_at + question.durationSeconds * 1000;
 }
 
 /**
  * Clôt la question courante : calcule le pointage de chaque réponse reçue
  * et l'ajoute au total du joueur. Le bonus de la première bonne réponse va à
  * la première bonne réponse dans l'ordre d'arrivée (horloge du serveur).
+ *
+ * Trois écritures qui doivent réussir ensemble — les points de chaque
+ * réponse, les totaux des joueurs, l'état de la partie — donc une
+ * transaction.
  */
 export function closeQuestion(game) {
   if (game.state !== 'question') return;
   const question = currentQuestion(game);
-  const correctChoices = new Set(question.choices.filter((c) => c.isCorrect).map((c) => c.id));
-  const questionDurationMs = question.durationSeconds * 1000;
-
-  const inArrivalOrder = [...game.answers.entries()].sort(
-    (a, b) => a[1].receivedAt - b[1].receivedAt,
+  const correctChoices = new Set(
+    question.choices.filter((c) => c.isCorrect).map((c) => c.id),
   );
+  const questionDurationMs = question.durationSeconds * 1000;
+  const answers = repository.getAnswersForQuestion(game.id, question.id);
 
-  let firstAwarded = false;
-  for (const [nickname, answer] of inArrivalOrder) {
-    const responseTimeMs = answer.receivedAt - game.openedAt;
-    const isCorrect = correctChoices.has(answer.choiceId);
-    const isFirstCorrectAnswer =
-      isCorrect && responseTimeMs <= questionDurationMs && !firstAwarded;
-    if (isFirstCorrectAnswer) firstAwarded = true;
+  repository.withTransaction(() => {
+    let firstAwarded = false;
+    for (const answer of answers) {
+      const responseTimeMs = answer.answered_at - game.question_started_at;
+      const isCorrect = correctChoices.has(answer.choice_id);
+      const isFirstCorrectAnswer =
+        isCorrect && responseTimeMs <= questionDurationMs && !firstAwarded;
+      if (isFirstCorrectAnswer) firstAwarded = true;
 
-    game.players.get(nickname).score += calculateScore({
-      isCorrect,
-      responseTimeMs,
-      questionDurationMs,
-      isFirstCorrectAnswer,
-    });
-  }
-
+      const points = calculateScore({
+        isCorrect,
+        responseTimeMs,
+        questionDurationMs,
+        isFirstCorrectAnswer,
+      });
+      repository.setAnswerPoints(answer.id, points);
+      repository.addPointsToPlayer(answer.player_id, points);
+    }
+    repository.updateGameState(game.id, 'results', game.question_index, null);
+  });
   game.state = 'results';
-  game.answers = new Map();
-  game.openedAt = null;
-  game.deadline = null;
+  game.question_started_at = null;
 }
 
 /** Clôt la question courante si son échéance est passée. */
 export function closeQuestionIfExpired(game) {
-  if (game.state === 'question' && Date.now() > game.deadline) {
+  if (game.state === 'question' && Date.now() > deadlineOf(game, currentQuestion(game))) {
     closeQuestion(game);
   }
 }
@@ -97,37 +94,37 @@ export function closeQuestionIfExpired(game) {
 /** Passe à la question suivante, ou termine la partie s'il n'y en a plus. */
 export function advance(game) {
   if (game.state === 'finished') return;
-  if (game.questionIndex + 1 >= game.quiz.questions.length) {
-    game.state = 'finished';
+  const quiz = repository.getQuizWithQuestions(game.quiz_id);
+  if (game.question_index + 1 >= quiz.questions.length) {
+    repository.updateGameState(game.id, 'finished', game.question_index, null);
     return;
   }
-  game.questionIndex += 1;
-  game.state = 'question';
-  game.answers = new Map();
-  game.openedAt = Date.now();
-  game.deadline = game.openedAt + currentQuestion(game).durationSeconds * 1000;
+  repository.updateGameState(game.id, 'question', game.question_index + 1, Date.now());
 }
 
 /**
- * L'état visible par les clients. Les choix sont transmis SANS is_correct :
- * le serveur ne dit jamais au navigateur où est la bonne réponse.
+ * L'état visible par les clients, relu au complet dans la base. Les choix
+ * sont transmis SANS is_correct : le serveur ne dit jamais au navigateur où
+ * est la bonne réponse.
  */
-export function publicState(game) {
-  const question = game.state === 'question' ? currentQuestion(game) : null;
+export function publicState(code) {
+  const game = repository.findGameByCode(code);
+  const quiz = repository.getQuizWithQuestions(game.quiz_id);
+  const question = game.state === 'question' ? quiz.questions[game.question_index] : null;
   return {
     code: game.code,
     state: game.state,
-    questionIndex: game.questionIndex,
-    questionCount: game.quiz.questions.length,
-    title: game.quiz.title,
+    questionIndex: game.question_index,
+    questionCount: quiz.questions.length,
+    title: quiz.title,
     question: question && {
       text: question.text,
-      deadline: game.deadline,
+      deadline: deadlineOf(game, question),
       choices: question.choices.map((c) => ({ id: c.id, text: c.text })),
     },
-    players: [...game.players.values()]
-      .map((p) => ({ nickname: p.nickname, score: p.score }))
-      .sort((a, b) => b.score - a.score || a.nickname.localeCompare(b.nickname)),
-    answerCount: game.answers.size,
+    players: repository
+      .getPlayers(game.id)
+      .map((p) => ({ nickname: p.nickname, score: p.score })),
+    answerCount: question ? repository.countAnswers(game.id, question.id) : 0,
   };
 }

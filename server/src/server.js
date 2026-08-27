@@ -1,45 +1,45 @@
 /**
- * Quiz M9 — le serveur de la salle de jeu, version semaine 1.
+ * Quiz M9 — le serveur, version semaine 2.
  *
- * L'état des parties vit en mémoire (voir game.js). Le questionnaire vient
- * de data/quiz.db, lu une fois au démarrage. Le client interroge l'état par
- * sondage HTTP toutes les secondes — c'est la dette de la semaine 1, à
- * régler la semaine 7.
+ * L'état des parties vit dans SQLite (server/data/quizm9.db) : on peut
+ * redémarrer le serveur en pleine partie. Le client interroge l'état par
+ * sondage HTTP toutes les secondes — la dette de la semaine 1, à régler la
+ * semaine 7.
+ *
+ * La plomberie d'une requête :  route → moteur de jeu → repository/ → base.
  *
  * Le contrat de l'API :
  *
- *   POST /api/games                    201 { code }
- *   POST /api/games/:code/players      201 { nickname }   corps : { nickname }
+ *   GET  /api/quizzes                  200 [{ id, title, questionCount }]
+ *   GET  /api/quizzes/:id              200 le questionnaire complet
+ *   POST /api/games                    201 { code }        corps : { quizId }
+ *   POST /api/games/:code/players     201 { nickname }    corps : { nickname }
  *   GET  /api/games/:code              200 état public
- *   POST /api/games/:code/next         200 état public
- *   POST /api/games/:code/answers      201 {}             corps : { nickname, choiceId }
+ *   POST /api/games/:code/next        200 état public
+ *   POST /api/games/:code/answers     201 {}              corps : { nickname, choiceId }
  *
- * Toute erreur a la forme { error: "un message" } : 404 si la partie
+ * Toute erreur a la forme { error: "un message" } : 404 si la ressource
  * n'existe pas, 400 pour une demande invalide.
  */
 import express from 'express';
-import { fileURLToPath } from 'node:url';
-import { loadQuiz } from './quiz.js';
+import * as repository from './repository/index.js';
 import {
   advance,
   closeQuestion,
   closeQuestionIfExpired,
   createGame,
   currentQuestion,
-  findGame,
   publicState,
 } from './game.js';
+
+repository.initializeDatabase();
 
 const app = express();
 app.use(express.json());
 
-const quiz = loadQuiz(
-  fileURLToPath(new URL('../data/quiz.db', import.meta.url)),
-);
-
 /** Retrouve la partie du paramètre :code, ou répond 404. */
 function requestedGame(req, res) {
-  const game = findGame(req.params.code);
+  const game = repository.findGameByCode(req.params.code);
   if (!game) {
     res.status(404).json({ error: 'Partie introuvable.' });
     return null;
@@ -47,9 +47,29 @@ function requestedGame(req, res) {
   return game;
 }
 
-// Créer une partie (animateur).
+// Tous les questionnaires — le catalogue.
+app.get('/api/quizzes', (req, res) => {
+  res.status(200).json(repository.listQuizzes());
+});
+
+// Un questionnaire complet, avec ses bonnes réponses : la vue de l'AUTEUR,
+// pas celle d'un joueur en partie. Sera réservée à l'auteur connecté à la
+// semaine 5.
+app.get('/api/quizzes/:id', (req, res) => {
+  const quiz = repository.getQuizWithQuestions(Number(req.params.id));
+  if (!quiz) {
+    return res.status(404).json({ error: 'Questionnaire introuvable.' });
+  }
+  res.status(200).json(quiz);
+});
+
+// Créer une partie sur un questionnaire (animateur).
 app.post('/api/games', (req, res) => {
-  const game = createGame(quiz);
+  const quizId = Number(req.body?.quizId);
+  if (!repository.getQuizWithQuestions(quizId)) {
+    return res.status(404).json({ error: 'Questionnaire introuvable.' });
+  }
+  const game = createGame(quizId);
   res.status(201).json({ code: game.code });
 });
 
@@ -65,11 +85,11 @@ app.post('/api/games/:code/players', (req, res) => {
   if (game.state !== 'lobby') {
     return res.status(400).json({ error: 'La partie est déjà commencée.' });
   }
-  if (game.players.has(nickname)) {
+  if (repository.findPlayer(game.id, nickname)) {
     return res.status(400).json({ error: 'Ce pseudonyme est déjà pris.' });
   }
 
-  game.players.set(nickname, { nickname, score: 0 });
+  repository.addPlayer(game.id, nickname);
   res.status(201).json({ nickname });
 });
 
@@ -79,7 +99,7 @@ app.get('/api/games/:code', (req, res) => {
   if (!game) return;
 
   closeQuestionIfExpired(game);
-  res.status(200).json(publicState(game));
+  res.status(200).json(publicState(game.code));
 });
 
 // L'animateur avance : clôt la question en cours, ou passe à la suivante.
@@ -93,7 +113,7 @@ app.post('/api/games/:code/next', (req, res) => {
   } else {
     advance(game);
   }
-  res.status(200).json(publicState(game));
+  res.status(200).json(publicState(game.code));
 });
 
 // Un joueur répond à la question en cours.
@@ -107,21 +127,28 @@ app.post('/api/games/:code/answers', (req, res) => {
   }
 
   const { nickname, choiceId } = req.body ?? {};
-  if (!game.players.has(nickname)) {
+  const player = repository.findPlayer(game.id, nickname);
+  if (!player) {
     return res.status(400).json({ error: 'Joueur inconnu dans cette partie.' });
   }
-  if (game.answers.has(nickname)) {
+  const question = currentQuestion(game);
+  if (repository.findAnswer(game.id, player.id, question.id)) {
     return res.status(400).json({ error: 'Ce joueur a déjà répondu.' });
   }
-  const question = currentQuestion(game);
   if (!question.choices.some((c) => c.id === choiceId)) {
     return res.status(400).json({ error: 'Choix inconnu pour cette question.' });
   }
 
   // Le moment de la réponse est celui du SERVEUR : le bonus de rapidité ne
   // se négocie pas avec l'horloge du client (on y reviendra, semaine 11).
-  game.answers.set(nickname, { choiceId, receivedAt: Date.now() });
+  repository.recordAnswer(game.id, player.id, question.id, choiceId, Date.now());
   res.status(201).json({});
+});
+
+// Une erreur levée dans une route — dont les « À faire. » du repository —
+// devient une réponse JSON au lieu de faire tomber le serveur.
+app.use((err, req, res, next) => {
+  res.status(500).json({ error: err.message });
 });
 
 const port = process.env.PORT ?? 3000;

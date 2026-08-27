@@ -1,6 +1,11 @@
 /**
- * Les appels à l'API du serveur. Chaque fonction renvoie le JSON de la
- * réponse, ou lève une Error portant le message d'erreur du serveur.
+ * Les appels à l'API du serveur, depuis le NAVIGATEUR. Chaque fonction
+ * renvoie le JSON de la réponse, ou lève une Error portant le message
+ * d'erreur du serveur.
+ *
+ * Les chemins sont relatifs (/api/…) : en développement, Vite les relaie au
+ * serveur Express (voir vite.config.js). Un loader ne passe pas par ici —
+ * il s'exécute côté serveur, où ce relais n'existe pas.
  */
 async function request(method, path, body) {
   const response = await fetch(path, {
@@ -15,8 +20,16 @@ async function request(method, path, body) {
   return data;
 }
 
-export function createGame() {
-  return request('POST', '/api/games');
+export function fetchQuizzes() {
+  return request('GET', '/api/quizzes');
+}
+
+export function fetchQuiz(id) {
+  return request('GET', `/api/quizzes/${id}`);
+}
+
+export function createGame(quizId) {
+  return request('POST', '/api/games', { quizId });
 }
 
 export function joinGame(code, nickname) {

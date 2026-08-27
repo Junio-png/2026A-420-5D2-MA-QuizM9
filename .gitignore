@@ -1,3 +1,9 @@
 node_modules/
 dist/
+build/
+.react-router/
 .env
+
+# La base locale : chacun la sienne, régénérée par le serveur.
+server/data/*.db
+server/data/*.db-*

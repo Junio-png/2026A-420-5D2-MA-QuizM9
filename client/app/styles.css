@@ -1,0 +1,220 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1a1a2e;
+  background: #f4f4f8;
+}
+
+body {
+  margin: 0;
+}
+
+.topnav {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  padding: 0.8rem 1rem;
+  background: #1a1a2e;
+}
+
+.topnav a {
+  color: #cfd4f2;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.topnav a.active {
+  color: white;
+  text-decoration: underline;
+}
+
+.screen {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.header .code {
+  font-size: 1.1rem;
+}
+
+.card {
+  background: white;
+  border-radius: 0.5rem;
+  padding: 1rem 1.5rem;
+  margin: 1rem 0;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
+}
+
+/* L'accueil : deux cartes côte à côte séparées par « ou » — un choix, pas des étapes. */
+.home-choices {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.home-choices .card {
+  flex: 1 1 0;
+  margin: 0;
+  display: grid;
+  align-content: center;
+  gap: 0.6rem;
+  justify-items: center;
+}
+
+.home-choices .card h2 {
+  margin: 0;
+}
+
+.home-choices .card p {
+  margin: 0;
+  color: #445;
+}
+
+.home-choices .card form {
+  justify-self: stretch;
+}
+
+.home-choices .or {
+  align-self: center;
+  margin: 0;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #667;
+}
+
+/* Sur un écran étroit (téléphone), les deux choix s'empilent, le « ou » entre les deux. */
+@media (max-width: 36rem) {
+  .home-choices {
+    flex-direction: column;
+  }
+}
+
+.card.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: left;
+}
+
+.quiz-list {
+  list-style: none;
+  padding: 0;
+}
+
+form {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: stretch;
+}
+
+form label {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  font-weight: bold;
+}
+
+input {
+  font-size: 1rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 0.3rem;
+}
+
+button,
+.button {
+  font-size: 1rem;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 0.3rem;
+  background: #3452c4;
+  color: white;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+button:disabled {
+  background: #aab;
+  cursor: not-allowed;
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.choices button {
+  padding: 1.5rem 1rem;
+  font-size: 1.1rem;
+}
+
+.countdown {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin: 0.5rem 0;
+}
+
+.leaderboard {
+  list-style-position: inside;
+  padding: 0;
+  max-width: 24rem;
+  margin: 1rem auto;
+  text-align: left;
+}
+
+.leaderboard li {
+  display: flex;
+  justify-content: space-between;
+  background: white;
+  border-radius: 0.3rem;
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.leaderboard li.me {
+  outline: 2px solid #3452c4;
+}
+
+.question {
+  text-align: left;
+}
+
+.question h2 {
+  font-size: 1.2rem;
+}
+
+.choice-list {
+  list-style: none;
+  padding: 0;
+}
+
+.choice-list li {
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.3rem;
+}
+
+.choice-list li.correct {
+  background: #e2f4e5;
+  font-weight: bold;
+}
+
+.notice {
+  background: #fff3cd;
+  border-radius: 0.3rem;
+  padding: 0.6rem 1rem;
+  display: inline-block;
+}
+
+.error {
+  color: #b00020;
+  font-weight: bold;
+}
+
+.progress {
+  color: #667;
+}

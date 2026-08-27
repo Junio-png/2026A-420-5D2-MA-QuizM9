@@ -1,8 +1,9 @@
 /**
  * Le crochet qui tient l'état de la partie à jour dans le navigateur.
  *
- * LA DETTE DE LA SEMAINE 1 : on interroge le serveur toutes les secondes en
- * HTTP, même quand il ne se passe rien. À régler la semaine 7.
+ * LA DETTE DE LA SEMAINE 1, toujours là : on interroge le serveur toutes
+ * les secondes en HTTP, même quand il ne se passe rien. À régler la
+ * semaine 7.
  */
 import { useEffect, useState } from 'react';
 import { fetchGame } from './api.js';

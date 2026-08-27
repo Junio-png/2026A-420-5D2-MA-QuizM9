@@ -1,26 +1,34 @@
 /**
- * Le harnais de vérification de la semaine 1.
+ * Le harnais de vérification de la semaine 2.
  *
- * Il joue une partie complète contre votre serveur et vérifie le contrat de
- * l'API ainsi que la fonction de pointage. Lancez-le depuis la racine, avec
- * le serveur démarré dans un autre terminal :
+ * Il vérifie les trois jalons du repository, joue une partie complète
+ * contre votre serveur, regarde DANS LA BASE que tout y est vraiment, puis
+ * vérifie le rendu côté serveur des pages /quizzes (partie 2). Lancez-le
+ * depuis la racine, avec les serveurs démarrés dans un autre terminal :
  *
  *     npm run dev        (terminal 1)
  *     npm run verifier   (terminal 2)
  *
  * Chaque ligne est une vérification : ✔ elle passe, ✘ elle échoue. Ce n'est
- * pas une note — c'est la boucle « écrire, lancer, regarder ». On l'ouvrira
- * ensemble la semaine 4 pour écrire les nôtres.
+ * pas une note — c'est la boucle « écrire, lancer, regarder ». Au départ,
+ * les ✘ suivent l'ordre de votre travail de la semaine : jalon ①, ②, ③,
+ * puis la partie 2.
  */
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { calculateScore } from '../src/scoring.js';
 
 const BASE = `http://localhost:${process.env.PORT ?? 3000}`;
+const CLIENT = 'http://localhost:5173';
+const DB_PATH = fileURLToPath(new URL('../data/quizm9.db', import.meta.url));
 const results = [];
 
 function check(name, condition, detail = '') {
   results.push({ name, ok: Boolean(condition), detail });
+}
+
+function section(title) {
+  results.push({ section: title });
 }
 
 async function request(method, path, body) {
@@ -38,7 +46,26 @@ async function request(method, path, body) {
   return { status: response.status, data };
 }
 
-// ── 1. La fonction de pointage, testée directement (sans serveur) ─────────
+/** Une lecture directe dans quizm9.db — le harnais a le droit, pas vous. */
+function inDatabase(fn) {
+  let db;
+  try {
+    db = new DatabaseSync(DB_PATH, { readOnly: true });
+  } catch {
+    return null;
+  }
+  try {
+    return fn(db);
+  } catch {
+    return null;
+  } finally {
+    db.close();
+  }
+}
+
+// ── 0. La fonction de pointage (fournie — doit toujours passer) ───────────
+
+section('Le pointage');
 
 check(
   'pointage : bonne réponse instantanée = 8 (5 + bonus rapidité 3)',
@@ -61,7 +88,7 @@ check(
   calculateScore({ isCorrect: true, responseTimeMs: 25000, questionDurationMs: 20000, isFirstCorrectAnswer: false }) === 0,
 );
 
-// ── 2. Le serveur est-il là ? ─────────────────────────────────────────────
+// ── 1. Le serveur est-il là ? ─────────────────────────────────────────────
 
 try {
   await fetch(BASE + '/api/games/000000');
@@ -72,25 +99,77 @@ try {
   process.exit(1);
 }
 
-// ── 3. Une partie complète, jouée contre l'API ────────────────────────────
+// ── 2. Jalon ① — le schéma est chargé, les questionnaires se lisent ───────
 
-// La bonne réponse de chaque question, lue directement dans quiz.db.
-const db = new DatabaseSync(
-  fileURLToPath(new URL('../data/quiz.db', import.meta.url)),
-  { readOnly: true },
+section('Jalon ① — schema.sql et les questionnaires');
+
+const EXPECTED_TABLES = ['account', 'quiz', 'question', 'choice', 'game', 'player', 'answer'];
+const tables = inDatabase((db) =>
+  db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((t) => t.name),
+) ?? [];
+for (const table of EXPECTED_TABLES) {
+  check(
+    `la table ${table} existe dans quizm9.db`,
+    tables.includes(table),
+    'initializeDatabase (repository/db.js) est-elle faite ? Le serveur a-t-il redémarré ?',
+  );
+}
+
+const quizCountInDb = inDatabase((db) => db.prepare('SELECT COUNT(*) AS n FROM quiz').get().n);
+check(
+  'les questionnaires de seed.sql sont dans la base',
+  quizCountInDb >= 2,
+  'la base était-elle vide au moment du chargement ? Supprimez quizm9.db et redémarrez.',
 );
-const correctChoices = db
-  .prepare('SELECT question_id, id FROM choice WHERE is_correct = 1')
-  .all();
-db.close();
-const correctChoiceByQuestion = new Map(correctChoices.map((c) => [c.question_id, c.id]));
 
-let r = await request('POST', '/api/games');
-check('POST /api/games → 201 et un code', r.status === 201 && typeof r.data?.code === 'string');
+let r = await request('GET', '/api/quizzes');
+check(
+  'GET /api/quizzes → 200 et au moins deux questionnaires',
+  r.status === 200 && Array.isArray(r.data) && r.data.length >= 2,
+  r.data?.error,
+);
+check(
+  'chaque questionnaire a un id, un titre et son nombre de questions',
+  Array.isArray(r.data) &&
+    r.data.every((q) => q.id && q.title && typeof q.questionCount === 'number' && q.questionCount > 0),
+);
+
+r = await request('GET', '/api/quizzes/1');
+check(
+  'GET /api/quizzes/1 → 200, cinq questions, leurs choix en ordre',
+  r.status === 200 && r.data?.questions?.length === 5 && r.data.questions[0].choices?.length === 4,
+);
+
+r = await request('GET', '/api/quizzes/999999');
+check('GET sur un questionnaire inconnu → 404 { error }', r.status === 404 && r.data?.error);
+
+// ── 3. Jalon ② — créer une partie, et la voir dans la base ────────────────
+
+section('Jalon ② — créer une partie');
+
+r = await request('POST', '/api/games', { quizId: 999999 });
+check('POST /api/games sur un questionnaire inconnu → 404', r.status === 404);
+
+r = await request('POST', '/api/games', { quizId: 1 });
+check(
+  'POST /api/games → 201 et un code',
+  r.status === 201 && typeof r.data?.code === 'string',
+  r.data?.error,
+);
 const code = r.data?.code;
 
-r = await request('GET', '/api/games/000000');
-check('GET sur une partie inconnue → 404 { error }', r.status === 404 && r.data?.error);
+const gameRow = inDatabase((db) =>
+  db.prepare('SELECT * FROM game WHERE code = ?').get(code),
+);
+check(
+  'la partie est une LIGNE de la table game — elle survivra au redémarrage',
+  gameRow && gameRow.quiz_id === 1 && gameRow.state === 'lobby' && gameRow.question_index === -1,
+);
+check('la partie porte un created_at (horodatage du serveur)', gameRow?.created_at > 0);
+
+// ── 4. Jalon ③ — inscrire des joueurs, et les voir dans la base ───────────
+
+section('Jalon ③ — inscrire un joueur');
 
 r = await request('GET', `/api/games/${code}`);
 check(
@@ -98,8 +177,11 @@ check(
   r.status === 200 && r.data?.state === 'lobby' && r.data?.players?.length === 0,
 );
 
+r = await request('GET', '/api/games/000000');
+check('GET sur une partie inconnue → 404 { error }', r.status === 404 && r.data?.error);
+
 r = await request('POST', `/api/games/${code}/players`, { nickname: 'Alice' });
-check('Alice rejoint → 201', r.status === 201);
+check('Alice rejoint → 201', r.status === 201, r.data?.error);
 await request('POST', `/api/games/${code}/players`, { nickname: 'Bob' });
 
 r = await request('POST', `/api/games/${code}/players`, { nickname: 'Alice' });
@@ -108,8 +190,31 @@ check('pseudonyme déjà pris → 400 { error }', r.status === 400 && r.data?.er
 r = await request('POST', `/api/games/${code}/players`, {});
 check('pseudonyme manquant → 400 { error }', r.status === 400 && r.data?.error);
 
-r = await request('GET', `/api/games/${code}`);
-check('GET état → les deux joueurs sont là', r.data?.players?.length === 2);
+const playerRows = inDatabase((db) =>
+  db.prepare('SELECT * FROM player WHERE game_id = ? ORDER BY nickname').all(gameRow?.id ?? -1),
+);
+check(
+  'Alice et Bob sont des LIGNES de la table player, avec 0 point',
+  playerRows?.length === 2 && playerRows.every((p) => p.score === 0),
+);
+
+// ── 5. Une partie complète, jouée contre l'API ────────────────────────────
+
+section('Une partie complète');
+
+// La bonne réponse de chaque question du quiz 1, lue directement.
+const correctChoiceByQuestion = new Map(
+  (inDatabase((db) =>
+    db
+      .prepare(
+        `SELECT choice.question_id, choice.id
+           FROM choice
+           JOIN question ON question.id = choice.question_id
+          WHERE question.quiz_id = 1 AND choice.is_correct = 1`,
+      )
+      .all(),
+  ) ?? []).map((c) => [c.question_id, c.id]),
+);
 
 r = await request('POST', `/api/games/${code}/answers`, { nickname: 'Alice', choiceId: 1 });
 check('répondre avant la première question → 400', r.status === 400);
@@ -129,8 +234,11 @@ check(
   r.data?.question?.choices?.every((c) => !('isCorrect' in c) && !('is_correct' in c)),
 );
 
+const firstQuestionId = inDatabase((db) =>
+  db.prepare('SELECT id FROM question WHERE quiz_id = 1 AND position = 1').get(),
+)?.id;
 const choicesQ1 = r.data?.question?.choices ?? [];
-const correctQ1 = choicesQ1.find((c) => correctChoiceByQuestion.get(1) === c.id)?.id;
+const correctQ1 = choicesQ1.find((c) => correctChoiceByQuestion.get(firstQuestionId) === c.id)?.id;
 const wrongQ1 = choicesQ1.find((c) => c.id !== correctQ1)?.id;
 
 r = await request('POST', `/api/games/${code}/answers`, { nickname: 'Alice', choiceId: correctQ1 });
@@ -146,6 +254,18 @@ await request('POST', `/api/games/${code}/answers`, { nickname: 'Bob', choiceId:
 
 r = await request('GET', `/api/games/${code}`);
 check('l’état annonce 2 réponses reçues', r.data?.answerCount === 2);
+
+const answerRows = inDatabase((db) =>
+  db.prepare('SELECT * FROM answer WHERE game_id = ? ORDER BY answered_at').all(gameRow?.id ?? -1),
+);
+check(
+  'les réponses sont des LIGNES de la table answer, horodatées par le serveur',
+  answerRows?.length === 2 && answerRows.every((a) => a.answered_at > 0),
+);
+check(
+  'avant la clôture, les points d’une réponse sont encore NULL',
+  answerRows?.every((a) => a.points === null),
+);
 
 r = await request('POST', `/api/games/${code}/next`);
 check('next pendant une question → la question est close (résultats)', r.data?.state === 'results');
@@ -163,6 +283,21 @@ check(
   r.data?.players?.[0]?.nickname === 'Alice',
 );
 
+const closedRows = inDatabase((db) => ({
+  answers: db.prepare('SELECT points FROM answer WHERE game_id = ?').all(gameRow?.id ?? -1),
+  alice: db
+    .prepare('SELECT score FROM player WHERE game_id = ? AND nickname = ?')
+    .get(gameRow?.id ?? -1, 'Alice'),
+}));
+check(
+  'après la clôture, chaque réponse porte ses points dans la base',
+  closedRows?.answers?.length === 2 && closedRows.answers.every((a) => a.points !== null),
+);
+check(
+  'le score d’Alice dans la table player est celui du classement',
+  Number.isInteger(closedRows?.alice?.score) && closedRows.alice.score === alice?.score,
+);
+
 // On épuise les questions restantes (deux « next » par question) pour finir la partie.
 for (let i = 0; i < 12; i += 1) {
   r = await request('POST', `/api/games/${code}/next`);
@@ -170,15 +305,58 @@ for (let i = 0; i < 12; i += 1) {
 }
 check('après la dernière question, la partie est terminée', r.data?.state === 'finished');
 
+check(
+  'la partie terminée est dans la base : un redémarrage ne l’effacera pas',
+  inDatabase((db) => db.prepare('SELECT state FROM game WHERE code = ?').get(code))?.state ===
+    'finished',
+);
+
+// ── 6. Partie 2 — le rendu côté serveur de /quizzes ───────────────────────
+
+section('Partie 2 — rendu côté serveur');
+
+/** Le HTML que le NAVIGATEUR reçoit — avant que le moindre JavaScript tourne. */
+async function fetchHtml(path) {
+  try {
+    const response = await fetch(CLIENT + path);
+    return response.ok ? await response.text() : null;
+  } catch {
+    return null;
+  }
+}
+
+const quizzesHtml = await fetchHtml('/quizzes');
+check(
+  'le HTML de /quizzes contient déjà les titres des questionnaires',
+  quizzesHtml?.includes('SQL et SQLite'),
+  quizzesHtml === null
+    ? `client injoignable sur ${CLIENT} — npm run dev le démarre aussi`
+    : 'le loader est-il écrit ? Affichez la source de la page : la liste doit y être.',
+);
+
+const detailsHtml = await fetchHtml('/quizzes/2');
+check(
+  'le HTML de /quizzes/2 contient déjà les questions et leurs choix',
+  detailsHtml?.includes('lastInsertRowid'),
+  detailsHtml === null
+    ? `client injoignable sur ${CLIENT} — npm run dev le démarre aussi`
+    : 'même exercice que la liste, avec params.id',
+);
+
 // ── Bilan ─────────────────────────────────────────────────────────────────
 
 function render() {
   return results
-    .map((x) => `${x.ok ? '✔' : '✘'} ${x.name}${!x.ok && x.detail ? `\n    ↳ ${x.detail}` : ''}`)
+    .map((x) =>
+      x.section
+        ? `\n── ${x.section} ${'─'.repeat(Math.max(0, 55 - x.section.length))}`
+        : `${x.ok ? '✔' : '✘'} ${x.name}${!x.ok && x.detail ? `\n    ↳ ${x.detail}` : ''}`,
+    )
     .join('\n');
 }
 
 console.log(render());
-const passed = results.filter((x) => x.ok).length;
-console.log(`\n${passed}/${results.length} vérifications passent.`);
-process.exit(passed === results.length ? 0 : 1);
+const checks = results.filter((x) => !x.section);
+const passed = checks.filter((x) => x.ok).length;
+console.log(`\n${passed}/${checks.length} vérifications passent.`);
+process.exit(passed === checks.length ? 0 : 1);

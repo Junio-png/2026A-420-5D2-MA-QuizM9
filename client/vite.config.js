@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { reactRouter } from '@react-router/dev/vite';
 
-// Le client (port 5173) relaie ses appels /api au serveur Express (port 3000).
+// Le client (port 5173) relaie ses appels /api au serveur Express (port
+// 3000). Ce relais vaut pour le NAVIGATEUR ; un loader, lui, s'exécute côté
+// serveur et appelle l'API par son adresse complète.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [reactRouter()],
   server: {
     proxy: { '/api': 'http://localhost:3000' },
   },
