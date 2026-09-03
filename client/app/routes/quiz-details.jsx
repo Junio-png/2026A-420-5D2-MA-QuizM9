@@ -1,4 +1,5 @@
 import { Link, useLoaderData } from 'react-router';
+import { API_URL } from '../api-url.js';
 
 /**
  * Un questionnaire et ses questions — ce que l'animateur vérifie avant de
@@ -8,7 +9,7 @@ import { Link, useLoaderData } from 'react-router';
  * de l'URL (/quizzes/:id).
  */
 export async function loader({ params }) {
-  const response = await fetch(`http://localhost:3000/api/quizzes/${params.id}`);
+  const response = await fetch(`${API_URL}/api/quizzes/${params.id}`);
   if (!response.ok) {
     throw new Response('Questionnaire introuvable.', { status: 404 });
   }
@@ -23,6 +24,8 @@ export default function QuizDetails() {
       <h1>{quiz.title}</h1>
       <p>
         <Link to="/quizzes">← Mes questionnaires</Link>
+        {' · '}
+        <Link to={`/quizzes/${quiz.id}/edit`}>Modifier</Link>
       </p>
       {quiz.questions.map((question, i) => (
         <section key={question.id} className="card question">
