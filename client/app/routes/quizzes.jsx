@@ -1,4 +1,4 @@
-import { Form, Link, useLoaderData } from 'react-router';
+import { Form, Link, useLoaderData,useActionData,data,redirect } from 'react-router';
 import { API_URL } from '../api-url.js';
 
 /**
@@ -33,8 +33,30 @@ export async function loader() {
  * Imports nécessaires : data et redirect, de 'react-router'.
  */
 
+export async function action({ request }) {
+  const formData = await request.formData();
+  const title = formData.get('title');
+
+  const response = await fetch(`${API_URL}/api/quizzes`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ title })
+  });
+
+  if (!response.ok) {
+    const body = await response.json();
+    return data({ error: body.error }, { status: 400 });
+  }
+
+  const body = await response.json();
+  return redirect(`/quizzes/${body.id}/edit`);
+}
+
 export default function Quizzes() {
   const quizzes = useLoaderData();
+  const actionData = useActionData();
 
   return (
     <main className="screen">
@@ -62,6 +84,9 @@ export default function Quizzes() {
           Titre
           <input name="title" placeholder="Titre du questionnaire" required />
         </label>
+        {actionData?.error &&(
+          <p className="error">{actionData.error}</p>
+        )}
         {/* TODO (jalon ③) : afficher l'erreur renvoyée par l'action, s'il y en a une. */}
         <button>Créer</button>
       </Form>

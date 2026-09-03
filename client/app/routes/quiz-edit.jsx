@@ -16,7 +16,14 @@ import { API_URL } from '../api-url.js';
  * 404 si le questionnaire n'existe pas, sinon le JSON.
  */
 export async function loader({ params }) {
-  throw new Response('À faire : le loader de l’éditeur.', { status: 501 });
+  const response = await fetch(`${API_URL}/api/quizzes/${params.id}`);
+  if (response.status === 404) {
+    throw new Response('Questionnaire introuvable', { status: 404 });
+  }
+  if (!response.ok) {
+    throw new Error(`L'API répond ${response.status}.`);
+  }
+  return response.json();
 }
 
 /**
