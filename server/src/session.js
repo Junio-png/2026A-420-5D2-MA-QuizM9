@@ -14,7 +14,14 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const COOKIE_NAME = 'quizm9_session';
-const SECRET = process.env.SESSION_SECRET ?? 'developpement-seulement';
+const SECRET = process.env.SESSION_SECRET;
+// Pas de valeur par défaut : elle serait dans le dépôt, donc publique, et
+// quiconque la lit fabrique la session de son choix. Sans clé, ou avec une
+// clé trop courte pour résister à qui essaie toutes les possibilités, le
+// serveur refuse de démarrer.
+if (!SECRET || SECRET.length < 32) {
+  throw new Error('SESSION_SECRET absente ou trop courte (32 caractères au moins) : voir server/.env.example.');
+}
 // Durée de vie d'une session. Un jeton signé ne se révoque pas : c'est cette
 // date d'expiration qui limite les dégâts d'un cookie volé.
 const DUREE_MS = 7 * 24 * 60 * 60 * 1000; // une semaine

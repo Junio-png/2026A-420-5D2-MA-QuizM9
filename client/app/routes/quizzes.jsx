@@ -20,12 +20,17 @@ export async function loader({ request }) {
 }
 
 /**
- * L'action qui crée un questionnaire. React Router l'appelle quand le
- * <Form method="post"> ci-dessous est envoyé ; elle s'exécute sur le
- * serveur, comme le loader, et transmet le cookie de la même façon.
+ * L'action qui crée ou supprime un questionnaire. React Router l'appelle
+ * quand un <Form method="post"> de la page est envoyé ; elle s'exécute sur
+ * le serveur, comme le loader, et transmet le cookie de la même façon. Le
+ * champ caché « intent » dit quel formulaire a été envoyé.
  */
 export async function action({ request }) {
   const formData = await request.formData();
+
+  if (formData.get('intent') === 'delete') {
+    return deleteQuiz(request, Number(formData.get('quizId')));
+  }
 
   const response = await apiFetch(request, '/api/quizzes', {
     method: 'POST',
@@ -45,6 +50,18 @@ export async function action({ request }) {
   return redirect(`/quizzes/${body.id}/edit`);
 }
 
+async function deleteQuiz(request, quizId) {
+  const response = await apiFetch(request, `/api/quizzes/${quizId}`, { method: 'DELETE' });
+  if (response.status === 401) {
+    return redirect('/');
+  }
+  if (!response.ok) {
+    const body = await response.json();
+    return data({ error: body.error }, { status: response.status });
+  }
+  return { deleted: true };
+}
+
 export default function Quizzes() {
   const quizzes = useLoaderData();
   const actionData = useActionData();
@@ -52,6 +69,7 @@ export default function Quizzes() {
   return (
     <main className="screen">
       <h1>Mes questionnaires</h1>
+      {actionData?.error && <p className="error">{actionData.error}</p>}
       {quizzes.length === 0 && <p>Vous n'avez pas encore de questionnaire.</p>}
       <ul className="quiz-list">
         {quizzes.map((quiz) => (
@@ -64,7 +82,12 @@ export default function Quizzes() {
             </div>
             <div className="actions">
               <Link className="button" to={`/quizzes/${quiz.id}/edit`}>Modifier</Link>
-              <a className="button secondary" href={`/api/quizzes/${quiz.id}/delete`}>Supprimer</a>
+              {/* Un formulaire POST, pas un lien : supprimer modifie les données. */}
+              <Form method="post">
+                <input type="hidden" name="intent" value="delete" />
+                <input type="hidden" name="quizId" value={quiz.id} />
+                <button className="secondary">Supprimer</button>
+              </Form>
             </div>
           </li>
         ))}
@@ -79,7 +102,6 @@ export default function Quizzes() {
           Titre
           <input name="title" placeholder="Titre du questionnaire" required />
         </label>
-        {actionData?.error && <p className="error">{actionData.error}</p>}
         <button>Créer</button>
       </Form>
     </main>

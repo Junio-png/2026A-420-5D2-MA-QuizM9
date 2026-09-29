@@ -42,7 +42,7 @@ export async function startServer() {
     url.pathname = `/${dbName}`;
     process.env.DATABASE_URL = url.href;
   }
-  process.env.SESSION_SECRET = 'secret-de-test';
+  process.env.SESSION_SECRET = randomBytes(32).toString('hex');
 
   const { app } = await import('../src/app.js');
   const repository = await import('../src/repository/index.js');

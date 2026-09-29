@@ -30,11 +30,13 @@ export async function listQuizzes() {
  * catalogue. Même forme que listQuizzes.
  */
 export async function searchQuizzes(text) {
+  // Les % font partie de la VALEUR : ce sont les jokers de ILIKE, pas du SQL.
   const { rows } = await pool.query(
     `SELECT id, title, description,
             (SELECT COUNT(*) FROM question WHERE question.quiz_id = quiz.id) AS "questionCount"
        FROM quiz
-      WHERE title ILIKE '%${text}%' ORDER BY id`,
+      WHERE title ILIKE $1 ORDER BY id`,
+    [`%${text}%`],
   );
   return rows;
 }
