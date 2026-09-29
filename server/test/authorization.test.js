@@ -4,6 +4,7 @@
  */
 import { test, before, after } from 'node:test';
 import { startServer } from './helpers.js';
+import { assert } from 'node:console';
 
 let api;
 let alice;
@@ -33,7 +34,12 @@ async function aliceQuiz() {
 
 // ── Jalon 1 : il faut un compte ───────────────────────────────────────────
 
-test.todo('GET /api/quizzes/:id sans session est refusé (401)');
+test('GET /api/quizzes/:id sans session est refusé (401)', async()=>{
+  const id = aliceQuiz();
+const {status, data} = await api.request(`GET /api/quizzes/,${id}`);
+assert.equal(status,401);
+assert.equal(typeof data.error,'string')
+});
 
 // ── Jalon 2 : son questionnaire, pas celui des autres ─────────────────────
 

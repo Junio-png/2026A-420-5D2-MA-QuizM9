@@ -81,18 +81,15 @@ app.get('/api/quizzes', async (req, res) => {
 
 // Les questionnaires de l'auteur connecté. À faire (exercice 12, jalon 1) :
 // requireAccount remplace la vérification écrite à la main.
-app.get('/api/me/quizzes', async (req, res) => {
-  const account = await currentAccount(req);
-  if (!account) {
-    return res.status(401).json({ error: 'Connectez-vous pour voir vos questionnaires.' });
-  }
+app.get('/api/me/quizzes', requireAccount, async (req, res) => {
+  const account = req.account;
   res.status(200).json(await repository.listQuizzesForAccount(account.id));
 });
 
 // Un questionnaire complet, avec ses bonnes réponses : la vue de l'AUTEUR,
 // pas celle d'un joueur en partie. À faire (exercice 12, jalon 2) : réservée
 // à son auteur, comme toutes les routes de l'espace auteur plus bas.
-app.get('/api/quizzes/:id', async (req, res) => {
+app.get('/api/quizzes/:id',  requireAccount, requireQuizAuthor, async (req, res) => {
   const quiz = await repository.getQuizWithQuestions(Number(req.params.id));
   if (!quiz) {
     return res.status(404).json({ error: 'Questionnaire introuvable.' });
@@ -144,11 +141,9 @@ function validateQuestion(body) {
 
 // Créer un questionnaire vide : il appartient à l'auteur connecté.
 // À faire (exercice 12, jalon 1) : requireAccount.
-app.post('/api/quizzes', async (req, res) => {
-  const account = await currentAccount(req);
-  if (!account) {
-    return res.status(401).json({ error: 'Connectez-vous pour créer un questionnaire.' });
-  }
+app.post('/api/quizzes', requireAccount, async (req, res) => {
+  const account = req.account;
+
   const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
   if (title === '') {
     return res.status(400).json({ error: 'Le titre est obligatoire.' });
@@ -158,7 +153,7 @@ app.post('/api/quizzes', async (req, res) => {
 });
 
 // Changer la description d'un questionnaire (auteur).
-app.patch('/api/quizzes/:id', async (req, res) => {
+app.patch('/api/quizzes/:id', requireAccount,requireGameHost ,async (req, res) => {
   const quizId = Number(req.params.id);
   if (!(await repository.getQuizWithQuestions(quizId))) {
     return res.status(404).json({ error: 'Questionnaire introuvable.' });

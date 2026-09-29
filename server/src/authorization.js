@@ -24,6 +24,11 @@ import { currentAccount } from './auth.js';
  * À faire (exercice 12, jalon 1). Pour l'instant, laisse tout passer.
  */
 export async function requireAccount(req, res, next) {
+  const account = await currentAccount(req);
+  if (!account){
+    res.sendStatus(401)
+  }
+  req.account = account
   next();
 }
 
@@ -35,6 +40,17 @@ export async function requireAccount(req, res, next) {
  * À faire (exercice 12, jalons 2 et 4). Pour l'instant, laisse tout passer.
  */
 export async function requireQuizAuthor(req, res, next) {
+  const quizzId = await repository.getQuizWithQuestions(req.param.id)
+
+  if (!quizzId){
+    res.sendStatus(404)
+  }
+
+  if(req.account_id !== req.account.id){
+    res.sendStatus(403)
+  }
+
+  req.quizzId = quiz;
   next();
 }
 
