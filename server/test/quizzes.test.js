@@ -2,10 +2,10 @@
  * Tests d'INTÉGRATION de l'espace auteur : on démarre l'API sur une base
  * temporaire et on lui parle en HTTP, comme le fait le client.
  *
- * Semaine 5 : créer un questionnaire demandera d'être connecté (exercice 11,
- * jalon 2). api.login() fabrique une session de test (voir helpers.js) ; les
- * tests l'envoient déjà, pour passer avant comme après votre travail. Les
- * test.todo sont à écrire : deux pour l'exercice 11, deux pour l'exercice 10.
+ * Depuis la semaine 5, créer un questionnaire demande d'être connecté :
+ * api.login() fabrique une session de test (voir helpers.js). Les requêtes
+ * de l'auteur envoient toutes sa session : elles passent avant comme après
+ * l'exercice 12.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,7 +34,11 @@ test('un titre valide crée le questionnaire (201)', async () => {
 
 // ── Semaine 5 : les comptes ───────────────────────────────────────────────
 
-test.todo('créer un questionnaire sans être connecté est refusé (401)');
+test('créer un questionnaire sans être connecté est refusé (401)', async () => {
+  const { status, data } = await api.request('POST', '/api/quizzes', { title: 'Capitales' });
+  assert.equal(status, 401);
+  assert.equal(typeof data.error, 'string');
+});
 
 test('un cookie de session altéré vaut pas de session (401)', async () => {
   const altered = session.slice(0, -4) + 'zzzz';
@@ -42,9 +46,16 @@ test('un cookie de session altéré vaut pas de session (401)', async () => {
   assert.equal(status, 401);
 });
 
-// Deux comptes (api.login('bob')), un questionnaire chacun : bob ne voit
-// que le sien.
-test.todo('GET /api/me/quizzes ne montre que les questionnaires de l’auteur');
+test('GET /api/me/quizzes ne montre que les questionnaires de l’auteur', async () => {
+  const bob = await api.login('bob');
+  await api.request('POST', '/api/quizzes', { title: 'Le questionnaire de Bob' }, bob);
+  await api.request('POST', '/api/quizzes', { title: 'Le questionnaire d’Alice' }, session);
+
+  const { status, data } = await api.request('GET', '/api/me/quizzes', undefined, bob);
+  assert.equal(status, 200);
+  assert.ok(data.every((quiz) => quiz.title !== 'Le questionnaire d’Alice'));
+  assert.ok(data.some((quiz) => quiz.title === 'Le questionnaire de Bob'));
+});
 
 // ── Les questions ─────────────────────────────────────────────────────────
 
@@ -74,7 +85,7 @@ test('une question sans bonne réponse est refusée (400)', async () => {
       { text: 'Ottawa', isCorrect: false },
       { text: 'Toronto', isCorrect: false },
     ],
-  }));
+  }), session);
   assert.equal(status, 400);
   assert.match(data.error, /exactement une bonne réponse/);
 });
@@ -86,16 +97,16 @@ test('une question avec deux bonnes réponses est refusée (400)', async () => {
       { text: 'Ottawa', isCorrect: true },
       { text: 'Toronto', isCorrect: true },
     ],
-  }));
+  }), session);
   assert.equal(status, 400);
 });
 
 test('une question valide est ajoutée et apparaît dans GET /api/quizzes/:id', async () => {
   const quizId = await createQuiz();
-  const created = await api.request('POST', `/api/quizzes/${quizId}/questions`, question());
+  const created = await api.request('POST', `/api/quizzes/${quizId}/questions`, question(), session);
   assert.equal(created.status, 201);
 
-  const { status, data } = await api.request('GET', `/api/quizzes/${quizId}`);
+  const { status, data } = await api.request('GET', `/api/quizzes/${quizId}`, undefined, session);
   assert.equal(status, 200);
   assert.equal(data.questions.length, 1);
   assert.equal(data.questions[0].id, created.data.id);
@@ -104,14 +115,30 @@ test('une question valide est ajoutée et apparaît dans GET /api/quizzes/:id', 
 
 test('une partie sur un questionnaire sans question est refusée (400)', async () => {
   const quizId = await createQuiz('Vide');
-  const { status, data } = await api.request('POST', '/api/games', { quizId });
+  const { status, data } = await api.request('POST', '/api/games', { quizId }, session);
   assert.equal(status, 400);
   assert.equal(typeof data.error, 'string');
 });
 
 // ── Exercice 10 : les parties d'un questionnaire ──────────────────────────
 
-// Un questionnaire avec une question, deux parties dessus, un joueur dans
-// la seconde : la seconde vient en premier, avec playerCount 1.
-test.todo('GET /api/quizzes/:id/games liste les parties, la plus récente d’abord');
-test.todo('GET /api/quizzes/:id/games sur un questionnaire inconnu répond 404');
+test('GET /api/quizzes/:id/games liste les parties, la plus récente d’abord', async () => {
+  const quizId = await createQuiz('Joué');
+  await api.request('POST', `/api/quizzes/${quizId}/questions`, question(), session);
+  const first = await api.request('POST', '/api/games', { quizId }, session);
+  const second = await api.request('POST', '/api/games', { quizId }, session);
+  await api.request('POST', `/api/games/${second.data.code}/players`, { nickname: 'zoé' });
+
+  const { status, data } = await api.request('GET', `/api/quizzes/${quizId}/games`, undefined, session);
+  assert.equal(status, 200);
+  assert.equal(data.length, 2);
+  assert.equal(data[0].code, second.data.code);
+  assert.equal(data[0].playerCount, 1);
+  assert.equal(data[1].code, first.data.code);
+  assert.equal(data[1].playerCount, 0);
+});
+
+test('GET /api/quizzes/:id/games sur un questionnaire inconnu répond 404', async () => {
+  const { status } = await api.request('GET', '/api/quizzes/999999/games', undefined, session);
+  assert.equal(status, 404);
+});

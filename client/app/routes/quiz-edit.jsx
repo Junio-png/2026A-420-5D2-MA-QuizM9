@@ -13,7 +13,9 @@ import { apiFetch } from '../api-url.js';
 export async function loader({ request, params }) {
   const response = await apiFetch(request, `/api/quizzes/${params.id}`);
   if (!response.ok) {
-    throw new Response('Questionnaire introuvable.', { status: 404 });
+    // 401, 403 ou 404 : le message de l'API, affiché par l'ErrorBoundary.
+    const body = await response.json();
+    throw data(body.error, { status: response.status });
   }
   return response.json();
 }
@@ -28,7 +30,23 @@ export async function action({ request, params }) {
   if (formData.get('intent') === 'delete') {
     return deleteQuestion(request, params.id, formData.get('questionId'));
   }
+  if (formData.get('intent') === 'describe') {
+    return describe(request, params.id, formData.get('description'));
+  }
   return addQuestion(request, params.id, formData);
+}
+
+async function describe(request, quizId, description) {
+  const response = await apiFetch(request, `/api/quizzes/${quizId}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ description }),
+  });
+  if (!response.ok) {
+    const body = await response.json();
+    return data({ error: body.error }, { status: response.status });
+  }
+  return { described: true };
 }
 
 async function addQuestion(request, quizId, formData) {
@@ -83,6 +101,16 @@ export default function QuizEdit() {
       </p>
 
       {actionData?.error && <p className="error">{actionData.error}</p>}
+
+      <Form method="post" className="card">
+        <input type="hidden" name="intent" value="describe" />
+        <label>
+          Description, affichée au catalogue (**gras**, *italique*)
+          <textarea name="description" defaultValue={quiz.description} rows={2} />
+        </label>
+        <button className="secondary">Enregistrer la description</button>
+        {actionData?.described && <p className="progress">Description enregistrée.</p>}
+      </Form>
 
       {quiz.questions.map((question, i) => (
         <section key={question.id} className="card question row">

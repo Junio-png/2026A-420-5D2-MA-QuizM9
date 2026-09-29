@@ -15,14 +15,17 @@ CREATE TABLE IF NOT EXISTS account (
   github_id  INTEGER NOT NULL UNIQUE,
   login      TEXT NOT NULL,
   name       TEXT,
-  avatar_url TEXT
+  avatar_url TEXT,
+  is_admin   INTEGER NOT NULL DEFAULT 0   -- 0 ou 1
 );
 
 CREATE TABLE IF NOT EXISTS quiz (
   id         INTEGER PRIMARY KEY,
   -- NULL pour les questionnaires de démonstration ; l'auteur, sinon.
-  account_id INTEGER REFERENCES account(id),
-  title      TEXT NOT NULL
+  account_id  INTEGER REFERENCES account(id),
+  title       TEXT NOT NULL,
+  -- Affichée au catalogue ; **gras** et *italique* permis.
+  description TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS question (
@@ -45,6 +48,8 @@ CREATE TABLE IF NOT EXISTS choice (
 CREATE TABLE IF NOT EXISTS game (
   id                  INTEGER PRIMARY KEY,
   quiz_id             INTEGER NOT NULL REFERENCES quiz(id),
+  -- L'animateur : le compte qui a créé la partie.
+  account_id          INTEGER REFERENCES account(id),
   -- Le code à six chiffres affiché par l'animateur.
   code                TEXT NOT NULL UNIQUE,
   -- 'lobby' | 'question' | 'results' | 'finished'

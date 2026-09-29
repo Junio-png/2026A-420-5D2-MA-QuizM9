@@ -11,15 +11,15 @@ import { pool } from './db.js';
 // ── Les écritures d'avant-partie ──────────────────────────────────────────
 
 /**
- * Insère une partie. state et question_index partent de leurs valeurs par
- * défaut : 'lobby', -1.
+ * Insère une partie, animée par ce compte (null : personne). state et
+ * question_index partent de leurs valeurs par défaut : 'lobby', -1.
  *
  * @returns {Promise<number>} l'id de la partie créée
  */
-export async function createGame(quizId, code, createdAt) {
+export async function createGame(quizId, code, createdAt, accountId = null) {
   const { rows } = await pool.query(
-    'INSERT INTO game (quiz_id, code, created_at) VALUES ($1, $2, $3) RETURNING id',
-    [quizId, code, createdAt],
+    'INSERT INTO game (quiz_id, code, created_at, account_id) VALUES ($1, $2, $3, $4) RETURNING id',
+    [quizId, code, createdAt, accountId],
   );
   return rows[0].id;
 }

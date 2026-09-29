@@ -2,10 +2,24 @@
 -- quiz est vide (voir repository/db-postgres.js et db-sqlite.js). Les id sont
 -- donnés à la main ; PostgreSQL avance ensuite ses compteurs (db-postgres.js).
 
-INSERT INTO quiz (id, title) VALUES
-  (1, 'Révision express du développement web'),
-  (2, 'SQL et PostgreSQL'),
-  (3, 'React en révision');
+-- Un compte de démonstration, administrateur. Sert entre autres à la note
+-- sur l'injection SQL : c'est cette ligne qu'une requête piégée fait sortir.
+-- Pas d'id explicite ici : on laisse la base l'attribuer (ce sera 1), pour
+-- que le prochain compte, créé à la connexion GitHub, n'entre pas en collision.
+INSERT INTO account (github_id, login, name, is_admin) VALUES
+  (583231, 'prof-quizm9', 'Vincent A.', TRUE);
+
+-- Un compte lambda, sans droits, pour la démo XSS (exercice 13). Alice écrit
+-- la description piégée ; l'attaque frappe ensuite quiconque, connecté, ouvre
+-- le catalogue. On l'endosse par le sélecteur d'atelier (DEV_LOGIN), sans
+-- passer par GitHub. Le github_id est bidon : aucun compte réel derrière.
+INSERT INTO account (github_id, login, name) VALUES
+  (999999001, 'alice', 'Alice');
+
+INSERT INTO quiz (id, title, description) VALUES
+  (1, 'Révision express du développement web', 'HTTP, Express et React : **cinq questions** pour se réchauffer.'),
+  (2, 'SQL et PostgreSQL', 'La matière de la *semaine 5*.'),
+  (3, 'React en révision', 'Trois questions sur les **composants**.');
 
 -- Quiz 1 : celui de la semaine 1.
 INSERT INTO question (id, quiz_id, position, text, duration_seconds) VALUES

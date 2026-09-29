@@ -1,5 +1,5 @@
 /**
- * Quiz M9 : l'application Express, version semaine 5.
+ * Quiz M9 : l'application Express, version semaine 6.
  *
  * Ce fichier construit `app` (les routes) sans l'écouter sur un port. C'est
  * server.js qui appelle app.listen ; un test, lui, démarre `app` sur un port
@@ -18,9 +18,12 @@
  *   POST   /api/auth/logout                   204 session effacée
  *   GET    /api/me                            200 { id, login, name, avatarUrl } ou 401
  *   GET    /api/me/quizzes                    200 [{ id, title, questionCount }] ou 401
- *   GET    /api/quizzes                       200 [{ id, title, questionCount }]
+ *   GET    /api/quizzes?q=texte               200 [{ id, title, description, questionCount }]
  *   GET    /api/quizzes/:id                   200 le questionnaire complet
- *   POST   /api/quizzes                       201 { id, title }  corps : { title }
+ *   GET    /api/quizzes/:id/games             200 [{ id, code, state, createdAt, playerCount }]
+ *   POST   /api/quizzes                       201 { id, title }  corps : { title }  (connecté)
+ *   PATCH  /api/quizzes/:id                   200 {}             corps : { description }
+ *   GET    /api/quizzes/:id/delete            302 vers /quizzes  (auteur)
  *   POST   /api/quizzes/:id/questions         201 { id }         corps : { text, durationSeconds, choices }
  *   DELETE /api/quizzes/:id/questions/:qid    200 {}
  *   POST /api/games                    201 { code }        corps : { quizId }
@@ -30,11 +33,14 @@
  *   POST /api/games/:code/answers     201 {}              corps : { nickname, choiceId }
  *
  * Toute erreur a la forme { error: "un message" } : 404 si la ressource
- * n'existe pas, 400 pour une demande invalide, 401 s'il faut être connecté.
+ * n'existe pas, 400 pour une demande invalide, 401 s'il faut être connecté,
+ * 403 si le compte connecté n'a pas le droit.
  */
 import express from 'express';
 import * as repository from './repository/index.js';
 import { auth, currentAccount } from './auth.js';
+import { devLogin, devLoginEnabled } from './dev-login.js';
+import { requireAccount, requireGameHost, requireQuizAuthor } from './authorization.js';
 import {
   advance,
   closeQuestion,
@@ -50,6 +56,12 @@ export const app = express();
 app.use(express.json());
 app.use(auth);
 
+// Atelier seulement (DEV_LOGIN=1) : le changement d'identité rapide du XSS
+// (exercice 13). Jamais monté en production.
+if (devLoginEnabled) {
+  app.use(devLogin);
+}
+
 /** Retrouve la partie du paramètre :code, ou répond 404. */
 async function requestedGame(req, res) {
   const game = await repository.findGameByCode(req.params.code);
@@ -60,26 +72,41 @@ async function requestedGame(req, res) {
   return game;
 }
 
-// Tous les questionnaires : le catalogue.
+// Tous les questionnaires : le catalogue. Avec ?q=, ceux dont le titre
+// contient ce texte.
 app.get('/api/quizzes', async (req, res) => {
-  res.status(200).json(await repository.listQuizzes());
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  res.status(200).json(q ? await repository.searchQuizzes(q) : await repository.listQuizzes());
 });
 
-// Les questionnaires de l'auteur connecté. À faire (exercice 11, jalon 2) :
-// 401 si personne n'est connecté (currentAccount), sinon SEULEMENT les siens
-// (repository.listQuizzesForAccount). Pour l'instant : tous.
+// Les questionnaires de l'auteur connecté. À faire (exercice 12, jalon 1) :
+// requireAccount remplace la vérification écrite à la main.
 app.get('/api/me/quizzes', async (req, res) => {
-  res.status(200).json(await repository.listQuizzes());
+  const account = await currentAccount(req);
+  if (!account) {
+    return res.status(401).json({ error: 'Connectez-vous pour voir vos questionnaires.' });
+  }
+  res.status(200).json(await repository.listQuizzesForAccount(account.id));
 });
 
 // Un questionnaire complet, avec ses bonnes réponses : la vue de l'AUTEUR,
-// pas celle d'un joueur en partie. Réservée à son auteur à la semaine 6.
+// pas celle d'un joueur en partie. À faire (exercice 12, jalon 2) : réservée
+// à son auteur, comme toutes les routes de l'espace auteur plus bas.
 app.get('/api/quizzes/:id', async (req, res) => {
   const quiz = await repository.getQuizWithQuestions(Number(req.params.id));
   if (!quiz) {
     return res.status(404).json({ error: 'Questionnaire introuvable.' });
   }
   res.status(200).json(quiz);
+});
+
+// Les parties jouées sur un questionnaire (exercice 10).
+app.get('/api/quizzes/:id/games', async (req, res) => {
+  const quizId = Number(req.params.id);
+  if (!(await repository.getQuizWithQuestions(quizId))) {
+    return res.status(404).json({ error: 'Questionnaire introuvable.' });
+  }
+  res.status(200).json(await repository.listGamesForQuiz(quizId));
 });
 
 // ── L'espace auteur ───────────────────────────────────────────────────────
@@ -115,15 +142,54 @@ function validateQuestion(body) {
   return null;
 }
 
-// Créer un questionnaire vide. À faire (exercice 11, jalon 2) : 401 si
-// personne n'est connecté, et le questionnaire appartient au compte connecté.
+// Créer un questionnaire vide : il appartient à l'auteur connecté.
+// À faire (exercice 12, jalon 1) : requireAccount.
 app.post('/api/quizzes', async (req, res) => {
+  const account = await currentAccount(req);
+  if (!account) {
+    return res.status(401).json({ error: 'Connectez-vous pour créer un questionnaire.' });
+  }
   const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
   if (title === '') {
     return res.status(400).json({ error: 'Le titre est obligatoire.' });
   }
-  const id = await repository.createQuiz(title, null);
+  const id = await repository.createQuiz(title, account.id);
   res.status(201).json({ id, title });
+});
+
+// Changer la description d'un questionnaire (auteur).
+app.patch('/api/quizzes/:id', async (req, res) => {
+  const quizId = Number(req.params.id);
+  if (!(await repository.getQuizWithQuestions(quizId))) {
+    return res.status(404).json({ error: 'Questionnaire introuvable.' });
+  }
+  const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
+  if (description.length > 500) {
+    return res.status(400).json({ error: 'La description fait au plus 500 caractères.' });
+  }
+  await repository.updateQuizDescription(quizId, description);
+  res.status(200).json({});
+});
+
+// Supprimer un questionnaire (auteur). Un simple lien suffit dans la page.
+app.get('/api/quizzes/:id/delete', async (req, res) => {
+  const account = await currentAccount(req);
+  if (!account) {
+    return res.status(401).json({ error: 'Connectez-vous pour supprimer un questionnaire.' });
+  }
+  const quiz = await repository.getQuizWithQuestions(Number(req.params.id));
+  if (!quiz) {
+    return res.status(404).json({ error: 'Questionnaire introuvable.' });
+  }
+  if (quiz.accountId !== account.id) {
+    return res.status(403).json({ error: 'Ce questionnaire n’est pas le vôtre.' });
+  }
+  try {
+    await repository.deleteQuiz(quiz.id);
+  } catch {
+    return res.status(400).json({ error: 'Ce questionnaire a déjà été joué : il ne peut plus être supprimé.' });
+  }
+  res.redirect('/quizzes');
 });
 
 // Ajouter une question à la fin d'un questionnaire (auteur).
@@ -160,7 +226,10 @@ app.delete('/api/quizzes/:id/questions/:questionId', async (req, res) => {
 
 // ── La salle de jeu ───────────────────────────────────────────────────────
 
-// Créer une partie sur un questionnaire (animateur).
+// Créer une partie sur un questionnaire (animateur). N'importe quel
+// questionnaire du catalogue : animer n'est pas modifier. À faire
+// (exercice 12, jalon 3) : il faut un compte, et la partie retient son
+// animateur.
 app.post('/api/games', async (req, res) => {
   const quizId = Number(req.body?.quizId);
   const quiz = await repository.getQuizWithQuestions(quizId);
@@ -206,6 +275,7 @@ app.get('/api/games/:code', async (req, res) => {
 });
 
 // L'animateur avance : clôt la question en cours, ou passe à la suivante.
+// À faire (exercice 12, jalon 3) : seulement l'animateur de CETTE partie.
 app.post('/api/games/:code/next', async (req, res) => {
   const game = await requestedGame(req, res);
   if (!game) return;

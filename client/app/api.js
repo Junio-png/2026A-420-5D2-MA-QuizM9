@@ -20,8 +20,9 @@ async function request(method, path, body) {
   return data;
 }
 
-export function fetchQuizzes() {
-  return request('GET', '/api/quizzes');
+/** Le catalogue ; avec `search`, seulement les titres qui contiennent ce texte. */
+export function fetchQuizzes(search = '') {
+  return request('GET', search ? `/api/quizzes?q=${encodeURIComponent(search)}` : '/api/quizzes');
 }
 
 export function fetchQuiz(id) {

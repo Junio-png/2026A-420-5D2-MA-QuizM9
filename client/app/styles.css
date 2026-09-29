@@ -117,7 +117,9 @@ form label {
   font-weight: bold;
 }
 
-input {
+input,
+textarea {
+  font: inherit;
   font-size: 1rem;
   padding: 0.5rem;
   border: 1px solid #ccc;
@@ -240,8 +242,24 @@ button:disabled {
   margin: 0;
 }
 
-button.secondary {
+button.secondary,
+.button.secondary {
   background: #667;
+}
+
+/* Les boutons d'une ligne de liste, côte à côte. */
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.actions form {
+  margin: 0;
+}
+
+input[type='search'] {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* La barre de navigation : le compte connecté, à droite. */
@@ -272,4 +290,20 @@ button.secondary {
   font-weight: bold;
   cursor: pointer;
   text-decoration: underline;
+}
+
+/* Atelier XSS (DEV_LOGIN) : bien voir que c'est un raccourci de classe. */
+.topnav .dev-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 0.4rem;
+  background: #4a1d1d;
+  color: #f2c9c9;
+  font-size: 0.85rem;
+}
+
+.topnav .dev-switch button.link {
+  color: #ffd27f;
 }

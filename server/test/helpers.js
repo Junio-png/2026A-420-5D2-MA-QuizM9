@@ -76,14 +76,16 @@ export async function startServer() {
      * Ouvre une session pour un compte de test, sans passer par GitHub :
      * on crée le compte, puis on signe le cookie nous-mêmes avec la clé de
      * test. Retourne la valeur à passer en `cookie` à request().
+     * login('root', { admin: true }) : un administrateur.
      */
-    async login(login = 'alice') {
+    async login(login = 'alice', { admin = false } = {}) {
       const account = await repository.findOrCreateAccount({
         githubId: 1000 + login.length * 7919 + login.charCodeAt(0),
         login,
         name: null,
         avatarUrl: null,
       });
+      await repository.setAdmin(account.id, admin);
       return `${COOKIE_NAME}=${signSession({ accountId: account.id })}`;
     },
     async close() {
