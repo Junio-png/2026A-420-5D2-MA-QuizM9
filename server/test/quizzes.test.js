@@ -3,7 +3,9 @@
  * temporaire et on lui parle en HTTP, comme le fait le client.
  *
  * Depuis la semaine 5, créer un questionnaire demande d'être connecté :
- * api.login() fabrique une session de test (voir helpers.js).
+ * api.login() fabrique une session de test (voir helpers.js). Les requêtes
+ * de l'auteur envoient toutes sa session : elles passent avant comme après
+ * l'exercice 12.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -83,7 +85,7 @@ test('une question sans bonne réponse est refusée (400)', async () => {
       { text: 'Ottawa', isCorrect: false },
       { text: 'Toronto', isCorrect: false },
     ],
-  }));
+  }), session);
   assert.equal(status, 400);
   assert.match(data.error, /exactement une bonne réponse/);
 });
@@ -95,16 +97,16 @@ test('une question avec deux bonnes réponses est refusée (400)', async () => {
       { text: 'Ottawa', isCorrect: true },
       { text: 'Toronto', isCorrect: true },
     ],
-  }));
+  }), session);
   assert.equal(status, 400);
 });
 
 test('une question valide est ajoutée et apparaît dans GET /api/quizzes/:id', async () => {
   const quizId = await createQuiz();
-  const created = await api.request('POST', `/api/quizzes/${quizId}/questions`, question());
+  const created = await api.request('POST', `/api/quizzes/${quizId}/questions`, question(), session);
   assert.equal(created.status, 201);
 
-  const { status, data } = await api.request('GET', `/api/quizzes/${quizId}`);
+  const { status, data } = await api.request('GET', `/api/quizzes/${quizId}`, undefined, session);
   assert.equal(status, 200);
   assert.equal(data.questions.length, 1);
   assert.equal(data.questions[0].id, created.data.id);
@@ -113,7 +115,7 @@ test('une question valide est ajoutée et apparaît dans GET /api/quizzes/:id', 
 
 test('une partie sur un questionnaire sans question est refusée (400)', async () => {
   const quizId = await createQuiz('Vide');
-  const { status, data } = await api.request('POST', '/api/games', { quizId });
+  const { status, data } = await api.request('POST', '/api/games', { quizId }, session);
   assert.equal(status, 400);
   assert.equal(typeof data.error, 'string');
 });
@@ -122,12 +124,12 @@ test('une partie sur un questionnaire sans question est refusée (400)', async (
 
 test('GET /api/quizzes/:id/games liste les parties, la plus récente d’abord', async () => {
   const quizId = await createQuiz('Joué');
-  await api.request('POST', `/api/quizzes/${quizId}/questions`, question());
-  const first = await api.request('POST', '/api/games', { quizId });
-  const second = await api.request('POST', '/api/games', { quizId });
+  await api.request('POST', `/api/quizzes/${quizId}/questions`, question(), session);
+  const first = await api.request('POST', '/api/games', { quizId }, session);
+  const second = await api.request('POST', '/api/games', { quizId }, session);
   await api.request('POST', `/api/games/${second.data.code}/players`, { nickname: 'zoé' });
 
-  const { status, data } = await api.request('GET', `/api/quizzes/${quizId}/games`);
+  const { status, data } = await api.request('GET', `/api/quizzes/${quizId}/games`, undefined, session);
   assert.equal(status, 200);
   assert.equal(data.length, 2);
   assert.equal(data[0].code, second.data.code);
@@ -137,6 +139,6 @@ test('GET /api/quizzes/:id/games liste les parties, la plus récente d’abord',
 });
 
 test('GET /api/quizzes/:id/games sur un questionnaire inconnu répond 404', async () => {
-  const { status } = await api.request('GET', '/api/quizzes/999999/games');
+  const { status } = await api.request('GET', '/api/quizzes/999999/games', undefined, session);
   assert.equal(status, 404);
 });

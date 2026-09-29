@@ -12,15 +12,29 @@ import { pool, withTransaction } from './db.js';
 
 /**
  * Tous les questionnaires, avec leur nombre de questions : le catalogue.
- * @returns {Promise<Array<{id: number, title: string, questionCount: number}>>}
+ * @returns {Promise<Array<{id: number, title: string, description: string, questionCount: number}>>}
  */
 export async function listQuizzes() {
   const { rows } = await pool.query(
-    `SELECT quiz.id, quiz.title, COUNT(question.id) AS "questionCount"
+    `SELECT quiz.id, quiz.title, quiz.description, COUNT(question.id) AS "questionCount"
        FROM quiz
        LEFT JOIN question ON question.quiz_id = quiz.id
       GROUP BY quiz.id
       ORDER BY quiz.id`,
+  );
+  return rows;
+}
+
+/**
+ * Les questionnaires dont le titre contient ce texte : la recherche du
+ * catalogue. Même forme que listQuizzes.
+ */
+export async function searchQuizzes(text) {
+  const { rows } = await pool.query(
+    `SELECT id, title, description,
+            (SELECT COUNT(*) FROM question WHERE question.quiz_id = quiz.id) AS "questionCount"
+       FROM quiz
+      WHERE title ILIKE '%${text}%' ORDER BY id`,
   );
   return rows;
 }
@@ -44,12 +58,12 @@ export async function listQuizzesForAccount(accountId) {
  * la bonne réponse. C'est la version pour le moteur de jeu et pour l'auteur,
  * jamais pour un joueur en pleine partie.
  *
- * @returns {Promise<null | {id, title, accountId, questions: Array<{id, text,
+ * @returns {Promise<null | {id, title, description, accountId, questions: Array<{id, text,
  *   durationSeconds, choices: Array<{id, text, isCorrect}>}>}>}
  */
 export async function getQuizWithQuestions(quizId) {
   const { rows: quizzes } = await pool.query(
-    'SELECT id, title, account_id FROM quiz WHERE id = $1',
+    'SELECT id, title, description, account_id FROM quiz WHERE id = $1',
     [quizId],
   );
   const quiz = quizzes[0];
@@ -75,6 +89,7 @@ export async function getQuizWithQuestions(quizId) {
   return {
     id: quiz.id,
     title: quiz.title,
+    description: quiz.description,
     accountId: quiz.account_id,
     questions: questions.map((q) => ({
       id: q.id,
@@ -125,6 +140,29 @@ export async function createQuiz(title, accountId) {
     [title, accountId],
   );
   return rows[0].id;
+}
+
+/** Remplace la description d'un questionnaire. */
+export async function updateQuizDescription(quizId, description) {
+  await pool.query('UPDATE quiz SET description = $1 WHERE id = $2', [description, quizId]);
+}
+
+/**
+ * Supprime un questionnaire, avec ses questions et leurs choix. Échoue (clé
+ * étrangère) s'il a déjà été joué : ses parties le référencent.
+ *
+ * @returns {Promise<boolean>} true si un questionnaire a été supprimé
+ */
+export function deleteQuiz(quizId) {
+  return withTransaction(async (tx) => {
+    await tx.query(
+      'DELETE FROM choice WHERE question_id IN (SELECT id FROM question WHERE quiz_id = $1)',
+      [quizId],
+    );
+    await tx.query('DELETE FROM question WHERE quiz_id = $1', [quizId]);
+    const { rowCount } = await tx.query('DELETE FROM quiz WHERE id = $1', [quizId]);
+    return rowCount > 0;
+  });
 }
 
 /**

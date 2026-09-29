@@ -1,4 +1,4 @@
-import { Link, useLoaderData } from 'react-router';
+import { Link, data, useLoaderData } from 'react-router';
 import { apiFetch } from '../api-url.js';
 
 /**
@@ -11,7 +11,9 @@ import { apiFetch } from '../api-url.js';
 export async function loader({ request, params }) {
   const response = await apiFetch(request, `/api/quizzes/${params.id}`);
   if (!response.ok) {
-    throw new Response('Questionnaire introuvable.', { status: 404 });
+    // 401, 403 ou 404 : le message de l'API, affiché par l'ErrorBoundary.
+    const body = await response.json();
+    throw data(body.error, { status: response.status });
   }
   return response.json();
 }

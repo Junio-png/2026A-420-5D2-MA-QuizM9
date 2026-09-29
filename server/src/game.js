@@ -23,10 +23,10 @@ async function generateCode() {
   return code;
 }
 
-/** Crée une partie sur ce questionnaire et retourne sa ligne game. */
-export async function createGame(quizId) {
+/** Crée une partie sur ce questionnaire, animée par ce compte, et retourne sa ligne game. */
+export async function createGame(quizId, accountId = null) {
   const code = await generateCode();
-  await repository.createGame(quizId, code, Date.now());
+  await repository.createGame(quizId, code, Date.now(), accountId);
   return repository.findGameByCode(code);
 }
 

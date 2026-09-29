@@ -29,3 +29,16 @@ export async function findOrCreateAccount({ githubId, login, name, avatarUrl }) 
   );
   return rows[0];
 }
+
+/** Tous les comptes, du plus ancien au plus récent : sert au sélecteur d'atelier (DEV_LOGIN). */
+export async function listAccounts() {
+  const { rows } = await pool.query(
+    'SELECT id, login, name, is_admin AS "isAdmin" FROM account ORDER BY id',
+  );
+  return rows;
+}
+
+/** Accorde ou retire le rôle d'administrateur. En classe : un UPDATE dans psql. */
+export async function setAdmin(accountId, isAdmin) {
+  await pool.query('UPDATE account SET is_admin = $1 WHERE id = $2', [isAdmin, accountId]);
+}

@@ -7,6 +7,7 @@
  * `pool.connect()` prête une « connexion ». Les différences de dialecte
  * sont réglées ici, et nulle part ailleurs :
  *   - les paramètres $1, $2, … deviennent ?1, ?2, … ;
+ *   - ILIKE devient LIKE (le LIKE de SQLite ignore déjà la casse) ;
  *   - les booléens deviennent 0 et 1 (SQLite n'en a pas) ;
  *   - le schéma est schema.sqlite.sql (pas de GENERATED AS IDENTITY).
  */
@@ -27,7 +28,7 @@ db.exec('PRAGMA foreign_keys = ON');
 
 /** Exécute une requête écrite pour pg et répond comme pg. */
 async function query(sql, params = []) {
-  const statement = db.prepare(sql.replace(/\$(\d+)/g, '?$1'));
+  const statement = db.prepare(sql.replace(/\$(\d+)/g, '?$1').replace(/\bILIKE\b/g, 'LIKE'));
   const values = params.map((v) => (typeof v === 'boolean' ? Number(v) : v));
 
   // Une requête qui produit des lignes se lit avec all() ; une écriture

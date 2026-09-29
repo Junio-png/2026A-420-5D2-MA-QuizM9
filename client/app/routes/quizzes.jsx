@@ -62,7 +62,10 @@ export default function Quizzes() {
               </h2>
               <p className="progress">{quiz.questionCount} questions</p>
             </div>
-            <Link className="button" to={`/quizzes/${quiz.id}/edit`}>Modifier</Link>
+            <div className="actions">
+              <Link className="button" to={`/quizzes/${quiz.id}/edit`}>Modifier</Link>
+              <a className="button secondary" href={`/api/quizzes/${quiz.id}/delete`}>Supprimer</a>
+            </div>
           </li>
         ))}
       </ul>
