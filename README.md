@@ -10,8 +10,7 @@ est sur le site du cours**, sous
 [Exercices](https://archambaultv.github.io/2026A-420-5D2-MA/g2/notes_de_cours/exercices).
 
 > **Semaine 6.** Le schéma de la base a changé : `docker compose down -v`
-> (ou supprimez `server/data/quizm9.db`) avant de redémarrer. `SESSION_SECRET`
-> est maintenant obligatoire dans `server/.env`.
+> (ou supprimez `server/data/quizm9.db`) avant de redémarrer.
 
 ## Prérequis
 
