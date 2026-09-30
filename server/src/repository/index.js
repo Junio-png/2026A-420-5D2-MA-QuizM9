@@ -8,7 +8,7 @@
  * pour un poste sans Docker (voir db.js).
  */
 export { closeDatabase, initializeDatabase, withTransaction } from './db.js';
-export { findAccount, findOrCreateAccount, listAccounts, setAdmin } from './accounts.js';
+export { findAccount, findOrCreateAccount, findPasswordAccount, setAdmin } from './accounts.js';
 export {
   addQuestion,
   createQuiz,

@@ -16,10 +16,14 @@
  *
  * Les identifiants viennent de l'environnement (server/.env en
  * développement) : jamais dans le dépôt.
+ *
+ * À côté, une connexion par mot de passe, réservée aux comptes de
+ * démonstration du seed (Alice) : POST /api/auth/login.
  */
 import { Router } from 'express';
 import { randomBytes } from 'node:crypto';
 import * as repository from './repository/index.js';
+import { verifyPassword } from './password.js';
 import { clearSession, readSession, writeSession } from './session.js';
 
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
@@ -88,6 +92,22 @@ auth.get('/api/auth/callback', async (req, res) => {
   });
   writeSession(res, { accountId: account.id });
   res.redirect('/quizzes');
+});
+
+// Connexion par mot de passe (comptes de démonstration). Le même message
+// que le login soit inconnu ou le mot de passe faux : on ne dit pas à un
+// attaquant lequel des deux il a trouvé.
+auth.post('/api/auth/login', async (req, res) => {
+  const { login, password } = req.body ?? {};
+  if (typeof login !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Identifiant et mot de passe obligatoires.' });
+  }
+  const account = await repository.findPasswordAccount(login.trim());
+  if (!account || !verifyPassword(password, account.password_hash)) {
+    return res.status(401).json({ error: 'Identifiant ou mot de passe invalide.' });
+  }
+  writeSession(res, { accountId: account.id });
+  res.status(204).end();
 });
 
 // La déconnexion : on efface le cookie. GitHub n'est pas concerné.

@@ -9,14 +9,16 @@
 -- 1970, l'horloge du SERVEUR (Date.now() côté Node). SQLite n'a ni BIGINT
 -- ni BOOLEAN : ses entiers font 64 bits, et un booléen est 0 ou 1.
 
--- Un compte est une identité GitHub : pas de mot de passe chez nous.
+-- Un compte se connecte avec GitHub (github_id) ou, pour les comptes de
+-- démonstration du seed, avec un mot de passe (password_hash).
 CREATE TABLE IF NOT EXISTS account (
-  id         INTEGER PRIMARY KEY,
-  github_id  INTEGER NOT NULL UNIQUE,
-  login      TEXT NOT NULL,
-  name       TEXT,
-  avatar_url TEXT,
-  is_admin   INTEGER NOT NULL DEFAULT 0   -- 0 ou 1
+  id            INTEGER PRIMARY KEY,
+  github_id     INTEGER UNIQUE,
+  login         TEXT NOT NULL,
+  name          TEXT,
+  avatar_url    TEXT,
+  password_hash TEXT,
+  is_admin      INTEGER NOT NULL DEFAULT 0   -- 0 ou 1
 );
 
 CREATE TABLE IF NOT EXISTS quiz (

@@ -10,8 +10,8 @@ export default [
   route('quizzes', 'routes/quizzes.jsx'),         // mes questionnaires (auteur connecté)
   route('quizzes/:id', 'routes/quiz-details.jsx'),   // un questionnaire
   route('quizzes/:id/edit', 'routes/quiz-edit.jsx'), // éditeur
+  route('login', 'routes/login.jsx'),             // connexion : GitHub ou mot de passe
   route('logout', 'routes/logout.jsx'),           // déconnexion (action seulement)
-  route('login-as', 'routes/login-as.jsx'),       // atelier : changer d'identité (DEV_LOGIN)
   route('salon/:code', 'routes/lobby.jsx'),       // salon d'attente
   route('jeu/:code', 'routes/game.jsx'),          // salle de jeu
 ];

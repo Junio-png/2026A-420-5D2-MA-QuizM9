@@ -11,10 +11,11 @@ INSERT INTO account (github_id, login, name, is_admin) VALUES
 
 -- Un compte lambda, sans droits, pour la démo XSS (exercice 13). Alice écrit
 -- la description piégée ; l'attaque frappe ensuite quiconque, connecté, ouvre
--- le catalogue. On l'endosse par le sélecteur d'atelier (DEV_LOGIN), sans
--- passer par GitHub. Le github_id est bidon : aucun compte réel derrière.
-INSERT INTO account (github_id, login, name) VALUES
-  (999999001, 'alice', 'Alice');
+-- le catalogue. Pas de GitHub pour elle : identifiant alice, mot de passe
+-- alice. La base n'en garde que l'empreinte, calculée une fois par :
+--   node -e "import('./src/password.js').then((m) => console.log(m.hashPassword('alice')))"
+INSERT INTO account (login, name, password_hash) VALUES
+  ('alice', 'Alice', 'scrypt$789b96c75e0b4002f354db5721a34e69$415eadd58720a92ee0deb6ed26038831c012eee81116a1ae3c357bc765db9dbc4cdc69d2b9e4f562f36c43aa5dd2076e820b2f048943de7d5de57b113c98cd99');
 
 INSERT INTO quiz (id, title, description) VALUES
   (1, 'Révision express du développement web', 'HTTP, Express et React : **cinq questions** pour se réchauffer.'),

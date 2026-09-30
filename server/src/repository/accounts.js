@@ -1,6 +1,7 @@
 /**
- * Les comptes : une ligne par identité GitHub. Tout le SQL sur account vit
- * ici, nulle part ailleurs.
+ * Les comptes : une ligne par identité GitHub, ou par compte de
+ * démonstration à mot de passe. Tout le SQL sur account vit ici, nulle part
+ * ailleurs.
  */
 import { pool } from './db.js';
 
@@ -30,12 +31,17 @@ export async function findOrCreateAccount({ githubId, login, name, avatarUrl }) 
   return rows[0];
 }
 
-/** Tous les comptes, du plus ancien au plus récent : sert au sélecteur d'atelier (DEV_LOGIN). */
-export async function listAccounts() {
+/**
+ * Le compte à mot de passe qui porte ce login, ou undefined. Seuls les
+ * comptes qui ONT un mot de passe : un utilisateur GitHub nommé alice n'est
+ * pas notre Alice.
+ */
+export async function findPasswordAccount(login) {
   const { rows } = await pool.query(
-    'SELECT id, login, name, is_admin AS "isAdmin" FROM account ORDER BY id',
+    'SELECT * FROM account WHERE login = $1 AND password_hash IS NOT NULL',
+    [login],
   );
-  return rows;
+  return rows[0];
 }
 
 /** Accorde ou retire le rôle d'administrateur. En classe : un UPDATE dans psql. */
