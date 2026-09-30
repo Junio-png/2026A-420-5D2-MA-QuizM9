@@ -40,6 +40,9 @@ Pour « Se connecter avec GitHub », copiez `server/.env.example` en
 `server/.env` et remplissez-le : les valeurs viennent de l'application OAuth
 que vous créez sur GitHub (voir l'exercice 11).
 
+Sans GitHub, un compte de démonstration se connecte par mot de passe :
+identifiant `alice`, mot de passe `alice`.
+
 ## Tester
 
 ```bash

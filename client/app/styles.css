@@ -292,18 +292,3 @@ input[type='search'] {
   text-decoration: underline;
 }
 
-/* Atelier XSS (DEV_LOGIN) : bien voir que c'est un raccourci de classe. */
-.topnav .dev-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.15rem 0.6rem;
-  border-radius: 0.4rem;
-  background: #4a1d1d;
-  color: #f2c9c9;
-  font-size: 0.85rem;
-}
-
-.topnav .dev-switch button.link {
-  color: #ffd27f;
-}

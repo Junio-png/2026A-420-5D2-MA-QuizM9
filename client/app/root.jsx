@@ -17,16 +17,8 @@ import './styles.css';
  * L'API répond 401 si personne ; la barre de navigation s'adapte.
  */
 export async function loader({ request }) {
-  // /api/dev/accounts n'existe qu'en atelier (DEV_LOGIN) : 404 sinon, et le
-  // sélecteur ne s'affiche pas.
-  const [me, dev] = await Promise.all([
-    apiFetch(request, '/api/me'),
-    apiFetch(request, '/api/dev/accounts'),
-  ]);
-  return {
-    account: me.ok ? await me.json() : null,
-    devAccounts: dev.ok ? await dev.json() : null,
-  };
+  const me = await apiFetch(request, '/api/me');
+  return { account: me.ok ? await me.json() : null };
 }
 
 /**
@@ -37,7 +29,6 @@ export function Layout({ children }) {
   // Les données du loader de la racine, lisibles depuis n'importe où.
   const data = useRouteLoaderData('root');
   const account = data?.account;
-  const devAccounts = data?.devAccounts;
 
   return (
     <html lang="fr">
@@ -64,21 +55,7 @@ export function Layout({ children }) {
               </Form>
             </>
           ) : (
-            // Un lien ordinaire, pas un <Link> : on quitte l'application
-            // pour aller chez GitHub, et on en reviendra par une redirection.
-            <a href="/api/auth/github">Se connecter avec GitHub</a>
-          )}
-          {/* Atelier XSS (DEV_LOGIN) : devenir un compte de test en un clic. */}
-          {devAccounts && (
-            <span className="dev-switch" title="Atelier : changer d'identité sans mot de passe">
-              Devenir :
-              {devAccounts.map((a) => (
-                <Form method="post" action="/login-as" key={a.id}>
-                  <input type="hidden" name="accountId" value={a.id} />
-                  <button className="link">{a.login}</button>
-                </Form>
-              ))}
-            </span>
+            <NavLink to="/login">Se connecter</NavLink>
           )}
         </nav>
         {children}

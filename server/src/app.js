@@ -15,6 +15,7 @@
  *
  *   GET    /api/auth/github                   302 vers GitHub
  *   GET    /api/auth/callback                 302 vers /quizzes, session ouverte
+ *   POST   /api/auth/login                    204 session ouverte  corps : { login, password }
  *   POST   /api/auth/logout                   204 session effacée
  *   GET    /api/me                            200 { id, login, name, avatarUrl } ou 401
  *   GET    /api/me/quizzes                    200 [{ id, title, questionCount }] ou 401
@@ -39,7 +40,6 @@
 import express from 'express';
 import * as repository from './repository/index.js';
 import { auth, currentAccount } from './auth.js';
-import { devLogin, devLoginEnabled } from './dev-login.js';
 import { requireAccount, requireGameHost, requireQuizAuthor } from './authorization.js';
 import {
   advance,
@@ -55,12 +55,6 @@ await repository.initializeDatabase();
 export const app = express();
 app.use(express.json());
 app.use(auth);
-
-// Atelier seulement (DEV_LOGIN=1) : le changement d'identité rapide du XSS
-// (exercice 13). Jamais monté en production.
-if (devLoginEnabled) {
-  app.use(devLogin);
-}
 
 /** Retrouve la partie du paramètre :code, ou répond 404. */
 async function requestedGame(req, res) {
