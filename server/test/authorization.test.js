@@ -36,8 +36,9 @@ async function aliceQuiz() {
 
 test('GET /api/quizzes/:id sans session est refusé (401)', async () => {
   const quizId = await aliceQuiz();
-  const { status } = await api.request('GET', `/api/quizzes/${quizId}`);
+  const { status, data } = await api.request('GET', `/api/quizzes/${quizId}`);
   assert.equal(status, 401);
+  assert.equal(typeof data.error, 'string');
 });
 
 // ── Jalon 2 : son questionnaire, pas celui des autres ─────────────────────
