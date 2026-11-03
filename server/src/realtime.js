@@ -28,6 +28,18 @@ import { closeQuestionIfExpired, publicState } from './game.js';
 
 /** Le serveur Socket.IO ; null tant que attachRealtime n'a pas été appelé. */
 let io = null;
+/** Le chat de chaque partie, en mémoire : code → { enabled, messages }. */
+const chats = new Map();
+let nextMessageId = 1;
+
+/** Retourne le chat de cette partie. Le crée, actif et vide, au premier appel. */
+function chatOf(code) {
+  if (!chats.has(code)) {
+    chats.set(code, { enabled: true, messages: [] });
+  }
+
+  return chats.get(code);
+}
 
 /** Greffe Socket.IO au serveur HTTP (celui que retourne app.listen). */
 export function attachRealtime(server) {
@@ -42,17 +54,62 @@ export function attachRealtime(server) {
         if (!game) {
           return ack({ error: 'Partie introuvable.' });
         }
+
         // Une connexion suit une seule partie : on quitte les autres salons.
         // (socket.id est le salon personnel de chaque connexion : on le garde.)
         for (const room of socket.rooms) {
           if (room !== socket.id) socket.leave(room);
         }
         socket.join(game.code);
+        socket.data.code = game.code;
 
         // Comme GET /api/games/:code : une échéance passée pendant que le
         // serveur était arrêté est constatée ici.
         await closeQuestionIfExpired(game);
-        ack({ game: await publicState(game.code) });
+        ack({ game: await publicState(game.code), chat: chatOf(game.code) });
+      } catch (err) {
+        console.error(err);
+        ack({ error: 'Erreur du serveur.' });
+      }
+    });
+
+    socket.on('chat:send', async (message, ack) => {
+      if (typeof ack !== 'function') return;
+
+      try {
+        const code = socket.data.code;
+        if (!code) {
+          return ack({ error: "Suivez d'abord une partie." });
+        }
+
+        const text = typeof message?.text === 'string' ? message.text.trim() : '';
+        if (!text || text.length > 200) {
+          return ack({ error: 'Message invalide.' });
+        }
+
+        const game = await repository.findGameByCode(code);
+        if (!game) {
+          return ack({ error: 'Partie introuvable.' });
+        }
+
+        const nickname = typeof message?.nickname === 'string' ? message.nickname : '';
+        const player = await repository.findPlayer(game.id, nickname);
+        if (!player) {
+          return ack({ error: 'Joueur invalide.' });
+        }
+
+        const chat = chatOf(code);
+        const chatMessage = {
+          id: nextMessageId++,
+          nickname: player.nickname,
+          text,
+          sendAt: Date.now(),
+        };
+        chat.messages.push(chatMessage);
+        if (chat.messages.length > 50) chat.messages.shift();
+
+        io.to(code).emit('chat:message', chatMessage);
+        ack({ success: true });
       } catch (err) {
         console.error(err);
         ack({ error: 'Erreur du serveur.' });

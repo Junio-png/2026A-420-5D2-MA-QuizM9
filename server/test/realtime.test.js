@@ -61,6 +61,27 @@ test('un joueur qui rejoint : le salon reçoit le nouvel état, sans le demander
   socket.disconnect();
 });
 
+test('un joueur peut envoyer un message dans le chat de la partie', async () => {
+  const code = await newGame();
+  await api.request('POST', `/api/games/${code}/players`, { nickname: 'zoé' });
+  const { socket, reply } = await join(code);
+
+  assert.deepEqual(reply.chat, { enabled: true, messages: [] });
+
+  const received = new Promise((resolve) => socket.once('chat:message', resolve));
+  const ack = await socket.emitWithAck('chat:send', {
+    nickname: 'zoé',
+    text: '  Bonjour !  ',
+  });
+
+  assert.deepEqual(ack, { success: true });
+  const chatMessage = await received;
+  assert.equal(chatMessage.nickname, 'zoé');
+  assert.equal(chatMessage.text, 'Bonjour !');
+  assert.equal(typeof chatMessage.sendAt, 'number');
+  socket.disconnect();
+});
+
 test('l’animateur lance la partie : la question arrive par Socket.IO', async () => {
   const code = await newGame();
   await api.request('POST', `/api/games/${code}/players`, { nickname: 'zoé' });
