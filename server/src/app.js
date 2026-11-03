@@ -1,5 +1,5 @@
 /**
- * Quiz M9 : l'application Express, version semaine 6.
+ * Quiz M9 : l'application Express, version semaine 10.
  *
  * Ce fichier construit `app` (les routes) sans l'écouter sur un port. C'est
  * server.js qui appelle app.listen ; un test, lui, démarre `app` sur un port
@@ -32,10 +32,14 @@
  *   GET  /api/games/:code              200 état public
  *   POST /api/games/:code/next        200 état public     (animateur)
  *   POST /api/games/:code/answers     201 {}              corps : { nickname, choiceId }
+ *   POST /api/games/:code/chat        200 { enabled }     corps : { enabled }  (animateur)
  *
  * Toute erreur a la forme { error: "un message" } : 404 si la ressource
  * n'existe pas, 400 pour une demande invalide, 401 s'il faut être connecté,
  * 403 si le compte connecté n'a pas le droit.
+ *
+ * Chaque route qui change une partie prévient ensuite les navigateurs qui la
+ * suivent, par Socket.IO (broadcastState, voir realtime.js).
  *
  * Les routes de l'auteur passent par requireAccount puis requireQuizAuthor
  * (authorization.js) : l'autorisation se décide ici, dans l'API, et une
@@ -53,6 +57,7 @@ import {
   currentQuestion,
   publicState,
 } from './game.js';
+import { broadcastState, closeAtDeadline, setChatEnabled } from './realtime.js';
 
 await repository.initializeDatabase();
 
@@ -223,10 +228,12 @@ app.post('/api/games/:code/players', async (req, res) => {
   }
 
   await repository.addPlayer(game.id, nickname);
+  await broadcastState(game.code);
   res.status(201).json({ nickname });
 });
 
-// L'état de la partie : la route que le client sonde toutes les secondes.
+// L'état de la partie. Le navigateur ne la sonde plus (il reçoit l'état par
+// Socket.IO), mais elle reste utile : curl, les tests.
 app.get('/api/games/:code', async (req, res) => {
   const game = await requestedGame(req, res);
   if (!game) return;
@@ -245,7 +252,12 @@ app.post('/api/games/:code/next', requireAccount, requireGameHost, async (req, r
   } else {
     await advance(game);
   }
-  res.status(200).json(await publicState(game.code));
+  const state = await publicState(game.code);
+  if (state.state === 'question') {
+    closeAtDeadline(game.code, state.question.deadline);
+  }
+  await broadcastState(game.code);
+  res.status(200).json(state);
 });
 
 // Un joueur répond à la question en cours.
@@ -274,7 +286,19 @@ app.post('/api/games/:code/answers', async (req, res) => {
   // Le moment de la réponse est celui du SERVEUR : le bonus de rapidité ne
   // se négocie pas avec l'horloge du client (on y reviendra, semaine 11).
   await repository.recordAnswer(game.id, player.id, question.id, choiceId, Date.now());
+  await broadcastState(game.code); // l'animateur voit le compte de réponses monter
   res.status(201).json({});
+});
+
+// L'animateur coupe ou rouvre le chat de sa partie, à tout moment. Les
+// messages, eux, passent par Socket.IO (voir realtime.js).
+app.post('/api/games/:code/chat', requireAccount, requireGameHost, (req, res) => {
+  const enabled = req.body?.enabled;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled doit valoir true ou false.' });
+  }
+  setChatEnabled(req.game.code, enabled);
+  res.status(200).json({ enabled });
 });
 
 // Une erreur levée dans une route (Express 5 attrape aussi les promesses
