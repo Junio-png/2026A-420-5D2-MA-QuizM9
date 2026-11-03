@@ -15,7 +15,7 @@ import Chat from '../components/Chat.jsx';
 export default function Game() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const {game, chat, sendMessage} = useGame(code);
+  const { game, chat, sendMessage } = useGame(code);
   const [session, setSession] = useState(null);
   // L'index de la dernière question à laquelle on a répondu : le bouton se
   // désactive après un clic, puis se réactive à la question suivante.
@@ -114,7 +114,8 @@ export default function Game() {
           <Leaderboard players={game.players} currentNickname={nickname} />
         </>
       )}
-      <Chat chat={chat} sendMessage={sendMessage} nickname={nickname} />
+
+      <Chat code={code} chat={chat} sendMessage={sendMessage} nickname={nickname} isHost={isHost} />
     </main>
   );
 }
